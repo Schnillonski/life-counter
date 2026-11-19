@@ -40,7 +40,7 @@ Eine kurze Beschreibung jedes Spielmodus und der wichtigsten Keywords steht dire
 - **Tippen** auf die linke Hälfte eines Feldes zieht ab, die rechte Hälfte addiert.
 - **Gedrückt halten** zählt in großen Schritten (±10, bei Yu-Gi-Oh! ±1000).
 - **Name oder „•••“ antippen** öffnet die Spieler-Details: Rechner, Commander Damage, Poison und weitere Zähler, Status wie Monarch, Name und Farbe.
-- **⚔-Chip** (Commander): zeigt den erhaltenen Commander Damage pro Gegner als Farbpunkt mit Zahl. Ist jemand anderes am Zug, antippen und z. B. +5 wählen – der Schaden wird gezählt und vom Life abgezogen.
+- **⚔ Commander Damage:** Unten im Feld steht der Schaden vom Spieler am Zug – antippen und z. B. +5 wählen, der Schaden wird gezählt und vom Life abgezogen. Oben neben dem Namen steht der bisherige Schaden aller anderen Gegner als Farbpunkt mit Zahl.
 - **Symbole neben dem Namen** (👑 Monarch, 🗝️ Initiative …) öffnen ein Kurzmenü, z. B. „Monarch übernehmen“.
 - **Großer farbiger Knopf** (in der Farbe des aktiven Spielers) gibt den Zug weiter.
 - **Knopf mit drei Strichen** öffnet das Menü.

@@ -363,22 +363,26 @@ function renderPanel(pid) {
   for (const f in p.flags) if (p.flags[f] && FLAGS[f]) badges += `<button class="bdg" data-act="flag" data-k="${f}">${FLAGS[f].b}</button>`;
 
   let foot = '';
-  if (P.cmd) { // ein Chip: alle Quellen als Farbpunkt + Zahl; hervorgehoben, wenn jemand anderes am Zug ist
+  if (P.cmd) {
+    // Unten: nur Commander Damage vom Spieler am Zug (zum schnellen Eintragen).
+    // Oben beim Namen: bisheriger Commander Damage aller anderen Gegner.
     const hitFrom = S.turns && state.players.length > 1 && state.active !== pid && !st.out ? state.active : null;
-    const src = Object.keys(p.cmd).map(Number).filter(f => state.players[f] && (p.cmd[f][0] || p.cmd[f][1]));
-    if (hitFrom != null) src.sort((x, y) => (y === hitFrom) - (x === hitFrom)); // aktiver Spieler zuerst
-    if (hitFrom != null || src.length) {
+    const tot = f => (p.cmd[f][0] || 0) + (p.cmd[f][1] || 0);
+    const src = Object.keys(p.cmd).map(Number).filter(f => f !== hitFrom && state.players[f] && tot(f));
+    if (src.length) {
       const leth = src.some(f => p.cmd[f][0] >= 21 || p.cmd[f][1] >= 21);
-      let parts = src.map(f => `<b style="background:${state.players[f].color}"></b>${(p.cmd[f][0] || 0) + (p.cmd[f][1] || 0)}`).join(' ');
-      if (hitFrom != null && !src.includes(hitFrom)) parts = `<b style="background:${state.players[hitFrom].color}"></b>+ ` + parts;
-      foot += `<button class="chip${hitFrom != null ? ' hit' : ''}${leth ? ' lethal' : ''}" data-act="cmdsum">⚔ ${parts}</button>`;
+      badges += `<button class="bdg${leth ? ' lethal' : ''}" data-act="cmdhead" data-f="${src.length === 1 ? src[0] : ''}">⚔ ${src.map(f => `<b class="cd" style="background:${state.players[f].color}"></b>${tot(f)}`).join(' ')}</button>`;
+    }
+    if (hitFrom != null) {
+      const a = p.cmd[hitFrom] || [0, 0], t = (a[0] || 0) + (a[1] || 0);
+      foot += `<button class="chip hit${a[0] >= 21 || a[1] >= 21 ? ' lethal' : ''}" data-act="cmdsum"><b style="background:${state.players[hitFrom].color}"></b>⚔ Cmd ${t || '+'}</button>`;
     }
   }
   const cs = CTR_ORDER.filter(k => p.ctr[k]);
-  if (cs.length) { // ein Chip: die zwei wichtigsten Zähler, Rest als +N
+  if (cs.length) { // ein Chip: bis zu 4 Zähler (Wichtigstes zuerst), Rest als +N
     const leth = cs.some(k => COUNTERS[k].lose && p.ctr[k] >= COUNTERS[k].lose);
-    const show = cs.slice(0, 2).map(k => `${COUNTERS[k].s} <span style="color:${COUNTERS[k].c}">${p.ctr[k]}</span>`).join(' · ');
-    foot += `<button class="chip${leth ? ' lethal' : ''}" data-act="ctrs" data-k="${cs.length === 1 ? cs[0] : ''}">${show}${cs.length > 2 ? ` <small>+${cs.length - 2}</small>` : ''}</button>`;
+    const show = cs.slice(0, 4).map(k => `${COUNTERS[k].s} <span style="color:${COUNTERS[k].c}">${p.ctr[k]}</span>`).join(' · ');
+    foot += `<button class="chip${leth ? ' lethal' : ''}" data-act="ctrs" data-k="${cs.length === 1 ? cs[0] : ''}">${show}${cs.length > 4 ? ` <small>+${cs.length - 4}</small>` : ''}</button>`;
   }
   const cd = Object.keys(CONDS).filter(c => p.conds[c]);
   if (cd.length) foot += `<button class="chip" data-act="cond" data-k="${cd[0]}">${cd.map(c => CONDS[c].n).join(' · ')}</button>`;
@@ -444,8 +448,11 @@ board.addEventListener('click', e => {
     case 'check': toggleCheck(pid, a.dataset.k); break;
     case 'flag': case 'cond': openQuick(pid, a.dataset.act, a.dataset.k); break;
     case 'ctrs': if (a.dataset.k) openQuick(pid, 'ctr', a.dataset.k); else openPlayer(pid); break;
-    case 'cmdsum': // Spieler am Zug trifft dieses Feld -> Schnelltasten; sonst Details mit allen Quellen
+    case 'cmdsum': // Spieler am Zug trifft dieses Feld -> Schnelltasten
       if (S.turns && state.players.length > 1 && state.active !== pid) openQuick(pid, 'cmd', null, state.active); else openPlayer(pid);
+      break;
+    case 'cmdhead': // bisheriger Schaden: eine Quelle -> deren Regler, mehrere -> Details
+      if (a.dataset.f !== '') openQuick(pid, 'cmd', null, +a.dataset.f); else openPlayer(pid);
       break;
   }
 });

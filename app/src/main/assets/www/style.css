@@ -242,7 +242,16 @@ table.st{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px}
 .pcard b .dot{vertical-align:-1px}
 .qamts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
 .qamts button{min-height:50px;border-radius:12px;background:var(--card3);font-size:18px;font-weight:700}
-.qamts button:active{background:var(--acc);color:#0b0c10}
+.qamts button:active,.qamts button.on{background:var(--acc);color:#0b0c10}
+/* Angriff / Drain / Proliferate */
+.an{display:flex;flex-direction:column;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.an small{font-size:12.5px;font-variant-numeric:tabular-nums}
+.p5{height:42px;padding:0 11px;border-radius:10px;background:var(--card3);font-weight:700;font-size:15px;flex-shrink:0}
+.p5:active{background:var(--acc);color:#0b0c10}
+.prev{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;font-size:14px;color:var(--mut)}
+.prev span{display:inline-flex;align-items:center;gap:6px}.prev b{color:var(--txt)}
+.plrow .qhead{margin:8px 0 6px;font-size:15px}
+.btn:disabled{opacity:.45}
 
 /* Runde fortsetzen */
 .resume{display:flex;flex-direction:column;gap:4px;margin-top:8px}

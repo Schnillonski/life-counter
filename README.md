@@ -50,6 +50,10 @@ Die Felder drehen sich automatisch zu den Sitzplätzen rund um das Handy. Wer li
 
 ## Weitere Funktionen
 
+- **⚔ Angriff:** Schaden auf mehrere Gegner auf einmal verteilen – als Damage, Commander Damage oder Infect, mit Lifelink-Schalter. Monarch und Initiative wandern automatisch zum Angreifer.
+- **🩸 Drain:** „Jeder Gegner verliert X“ mit einem Tipp, der Spieler gewinnt auf Wunsch die Summe (Gray Merchant, Blood Artist, Kokusho …).
+- **☣ Proliferate:** Alle passenden Counter (Poison, Energy, Experience, Rad) auswählen und gemeinsam um 1 erhöhen.
+- **🪄 Commander cast:** Erhöht die Commander Tax automatisch um 2.
 - **Würfel & Münze:** W4 bis W100, mehrere Würfel mit Summe, Planechase-Würfel. Handy schütteln würfelt erneut.
 - **Wer beginnt?** Zufällige Auswahl oder Finger-Wahl – alle legen einen Finger aufs Display.
 - **Ausscheiden** passiert automatisch bei 0 Life, 10 Poison oder 21 Commander Damage und lässt sich jederzeit korrigieren.

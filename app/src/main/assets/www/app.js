@@ -625,6 +625,9 @@ function openMenu() {
           ${mbtn('undo', '↶', 'Rückgängig', undoStack.length || '')}
           ${mbtn('dice', '🎲', 'Würfel & Münze')}
           ${mbtn('first', '🎯', 'Wer beginnt?')}
+          ${P.lose0 && multiOK() ? mbtn('atk', '⚔', 'Angriff') + mbtn('drain', '🩸', 'Drain') : ''}
+          ${P.g === 'Magic' ? mbtn('prolif', '☣', 'Proliferate') : ''}
+          ${taxGame() ? mbtn('cast', '🪄', 'Commander cast' + (turns ? ' · ' + esc(a.name) : '')) : ''}
           ${P.dn ? mbtn('dn', state.dayNight === 'night' ? '🌙' : '☀️', 'Day/Night: ' + dn) : ''}
           ${['monarch', 'initiative'].filter(f => (P.flags || []).includes(f)).map(f => mbtn('g_' + f, FLAGS[f].i, FLAGS[f].n + ': ' + (state[f] != null ? esc(state.players[state[f]].name) : '–'))).join('')}
         </div>
@@ -642,6 +645,8 @@ function openMenu() {
     },
     act: {
       pass: () => { closeAll(); passTurn(); }, undo: () => undo(), dice: () => openDice(), first: () => openFirst(), dn: () => cycleDN(),
+      atk: () => openAttack(null, 0), drain: () => openDrain(null, 0), prolif: () => openProlif(null, 0),
+      cast: () => castCommander(srcOf(null), 0),
       g_monarch: () => openQuick(state.monarch != null ? state.monarch : state.active, 'flag', 'monarch'),
       g_initiative: () => openQuick(state.initiative != null ? state.initiative : state.active, 'flag', 'initiative'),
       event: () => openEvent(null, 0), rem: () => openRem(null, 0), log: () => openLog(),
@@ -692,6 +697,9 @@ function openPlayer(pid) {
 
       h += `<h4>Aktionen</h4><div class="acts">
         ${S.turns && state.players.length > 1 ? `<button class="btn" data-a="turn">${state.active === p.id ? '✓ Ist am Zug' : '▶ Ist am Zug'}</button>` : ''}
+        ${taxGame() && !st.out ? '<button class="btn" data-a="cast">🪄 Commander cast</button>' : ''}
+        ${P.lose0 && !st.out && multiOK() ? '<button class="btn" data-a="atk">⚔ Angriff</button><button class="btn" data-a="drain">🩸 Drain</button>' : ''}
+        ${P.g === 'Magic' && !st.out ? '<button class="btn" data-a="prolif">☣ Proliferate</button>' : ''}
         <button class="btn" data-a="event">⚑ Ereignis</button>
         <button class="btn" data-a="rem">📌 Merker</button>
         <button class="btn${st.out ? '' : ' warn'}" data-a="out">${st.out ? '↺ Wiederbeleben' : '☠ Ausscheiden'}</button></div>
@@ -730,6 +738,10 @@ function openPlayer(pid) {
       flag: (a, e, o) => toggleFlag(o.pid, a.dataset.k),
       cond: (a, e, o) => toggleCond(o.pid, a.dataset.k),
       turn: (a, e, o) => { if (state.active !== o.pid) setActive(o.pid, false); },
+      cast: (a, e, o) => castCommander(o.pid, o.rot),
+      atk: (a, e, o) => openAttack(o.pid, o.rot),
+      drain: (a, e, o) => openDrain(o.pid, o.rot),
+      prolif: (a, e, o) => openProlif(o.pid, o.rot),
       event: (a, e, o) => openEvent(o.pid, o.rot),
       rem: (a, e, o) => openRem(o.pid, o.rot),
       out: (a, e, o) => {
@@ -796,7 +808,8 @@ function openQuick(pid, kind, k, from) {
         h += `<div class="qhead"><b class="dot" style="background:${q.color}"></b>${esc(q.name)} → <b class="dot" style="background:${p.color}"></b>${esc(p.name)}</div>` +
           (S.partner ? [0, 1] : [0]).map(i => `${S.partner ? `<h4>Commander ${i + 1}</h4>` : ''}` +
             `<div class="qamts">${[1, 2, 3, 4, 5, 6, 7, 8].map(n => `<button data-a="hit" data-i="${i}" data-d="${n}">+${n}</button>`).join('')}</div><div class="bigstep"><button data-a="cmd" data-i="${i}" data-d="-1">−1</button><b class="${(a[i] || 0) >= 21 ? 'lethal' : ''}">${a[i] || 0}</b><button data-a="cmd" data-i="${i}" data-d="1">+1</button></div>`).join('') +
-          `<p class="mut small">Tödlich ab 21 von demselben Commander.${S.cmdLife ? ' Wird automatisch vom Life abgezogen.' : ''}</p>`;
+          `<p class="mut small">Tödlich ab 21 von demselben Commander.${S.cmdLife ? ' Wird automatisch vom Life abgezogen.' : ''}</p>` +
+          (foes(o.qf).length > 1 ? `<button class="btn wide" style="margin-top:8px" data-a="attack">⚔ ${esc(q.name)} greift mehrere Gegner an …</button>` : '');
       }
       const txt = docText(term);
       if (txt) h += `<h4>Regel</h4><p class="small" style="margin:0">${esc(txt)}</p>`;
@@ -816,9 +829,196 @@ function openQuick(pid, kind, k, from) {
       cmd: (a, e, o) => changeCmd(o.pid, o.qf, +a.dataset.i, +a.dataset.d),
       hit: (a, e, o) => { changeCmd(o.pid, o.qf, +a.dataset.i, +a.dataset.d); closeSheet(o); },
       details: (a, e, o) => { closeSheet(o); openPlayer(o.pid); },
+      attack: (a, e, o) => { closeSheet(o); openAttack(o.qf, sheetRot(o.qf), 'cmd'); },
       doc: (a, e, o) => openDocs(null, term, o.rot)
     }
   });
+}
+
+/* ================= Mehrere Spieler auf einmal: Drain, Angriff, Proliferate ================= */
+// Ein Undo-Schritt, ein Ereignis im Protokoll plus je ein Eintrag pro betroffenem Spieler
+function bulk(text, src, fn) {
+  flushPending(); snap(null);
+  addLog({ type: 'event', pid: src, text });
+  fn();
+  pushHist(); checkStatus(); renderPanels(); refreshSheets(); saveSoon(); hap(25);
+}
+function lifeTo(p, d) { if (!d) return; p.life += d; bubble(p.id, d); addLog({ type: 'life', pid: p.id, d, v: p.life }); }
+function ctrTo(p, k, d) {
+  const C = COUNTERS[k], old = p.ctr[k] || 0;
+  let v = Math.max(0, old + d); if (C.max != null) v = Math.min(C.max, v);
+  if (v === old) return;
+  p.ctr[k] = v; addLog({ type: 'ctr', pid: p.id, k, d: v - old, v });
+}
+const foes = src => state.players.filter(q => q.id !== src && !status(q).out);
+const multiOK = () => state.players.filter(p => !status(p).out).length > 1;
+// Auswahl des handelnden Spielers (nur Spieler, die noch im Spiel sind)
+const psrc = sel => state.players.filter(p => !status(p).out).map(p =>
+  `<button class="pchip ${sel === p.id ? 'on' : ''}" data-a="src" data-p="${p.id}"><b class="dot" style="background:${p.color}"></b>${esc(p.name)}</button>`).join('');
+const srcOf = pid => pid != null && !status(state.players[pid]).out ? pid : state.active;
+
+/* ---------- Drain: Jeder Gegner verliert X, Quelle gewinnt die Summe ---------- */
+function openDrain(src, rot) {
+  hap(8);
+  openSheet({
+    title: '🩸 Drain', rot: rot || 0, pid: srcOf(src), x: 1, gain: true,
+    render(o) {
+      const p = state.players[o.pid], fs = foes(o.pid), sum = o.x * fs.length;
+      return `<p class="mut small" style="margin-top:4px">Jeder Gegner verliert X Life, z. B. Gray Merchant, Blood Artist, Kokusho, Exsanguinate.</p>
+        <h4>Von</h4><div class="pchips">${psrc(o.pid)}</div>
+        <h4>X = Life pro Gegner</h4>
+        <div class="qamts">${[1, 2, 3, 4, 5, 6, 7, 8].map(n => `<button class="${o.x === n ? 'on' : ''}" data-a="x" data-n="${n}">${n}</button>`).join('')}</div>
+        <div class="bigstep"><button data-a="xd" data-d="-1">−1</button><b>${o.x}</b><button data-a="xd" data-d="1">+1</button></div>
+        <button class="srow" data-a="gain"><span>${esc(p.name)} gewinnt die Summe<small>+${sum} Life (${fs.length} Gegner × ${o.x})</small></span><i class="sw${o.gain ? ' on' : ''}"></i></button>
+        <div class="prev">${fs.map(q => `<span><b class="dot" style="background:${q.color}"></b>${esc(q.name)} ${num(q.life)} → <b>${num(q.life - o.x)}</b></span>`).join('')}</div>
+        <button class="btn pri wide" data-a="go"${fs.length ? '' : ' disabled'}>Jeder Gegner −${o.x}${o.gain ? ` · ${esc(p.name)} +${sum}` : ''}</button>`;
+    },
+    act: {
+      src: (a, e, o) => { o.pid = +a.dataset.p; renderSheet(o, true); },
+      x: (a, e, o) => { o.x = +a.dataset.n; hap(5); renderSheet(o, true); },
+      xd: (a, e, o) => { o.x = Math.max(1, o.x + (+a.dataset.d)); hap(5); renderSheet(o, true); },
+      gain: (a, e, o) => { o.gain = !o.gain; renderSheet(o, true); },
+      go: (a, e, o) => {
+        const p = state.players[o.pid], fs = foes(o.pid), sum = o.x * fs.length; if (!fs.length) return;
+        closeSheet(o);
+        bulk(`Drain: jeder Gegner −${o.x}${o.gain ? `, ${p.name} +${sum}` : ''}`, p.id, () => {
+          fs.forEach(q => lifeTo(q, -o.x));
+          if (o.gain) lifeTo(p, sum);
+        });
+        toast(`🩸 Jeder Gegner −${o.x}${o.gain ? ` · ${esc(p.name)} +${sum}` : ''}`, { rot: o.rot });
+      }
+    }
+  });
+}
+
+/* ---------- Angriff: Schaden auf mehrere Gegner verteilen ---------- */
+function openAttack(src, rot, mode) {
+  hap(8);
+  openSheet({
+    title: '⚔ Angriff', rot: rot || 0, pid: srcOf(src), dmg: {}, mode: mode || 'dmg', ci: 0, ll: false,
+    render(o) {
+      const P = preset(), p = state.players[o.pid], fs = foes(o.pid);
+      const modes = [['dmg', 'Damage']];
+      if (P.cmd) modes.push(['cmd', 'Commander']);
+      if (P.ctr.includes('poison')) modes.push(['inf', 'Infect']);
+      if (!modes.some(m => m[0] === o.mode)) o.mode = 'dmg';
+      const sum = fs.reduce((s, q) => s + (o.dmg[q.id] || 0), 0);
+      let h = `<h4>Angreifer</h4><div class="pchips">${psrc(o.pid)}</div>`;
+      if (modes.length > 1) h += `<h4>Art</h4><div class="seg">${modes.map(([k, n]) => `<button class="${o.mode === k ? 'on' : ''}" data-a="mode" data-k="${k}">${n}</button>`).join('')}</div>`;
+      if (o.mode === 'cmd' && S.partner) h += `<div class="seg" style="margin-top:6px">${[0, 1].map(i => `<button class="${o.ci === i ? 'on' : ''}" data-a="ci" data-i="${i}">Commander ${i + 1}</button>`).join('')}</div>`;
+      h += `<h4>Schaden an</h4><div class="cmds">${fs.map(q => {
+        const d = o.dmg[q.id] || 0;
+        let info, leth;
+        if (o.mode === 'inf') {
+          const v0 = q.ctr.poison || 0, v = v0 + d;
+          info = `Poison ${v0}${d ? ' → ' + v : ''}`; leth = v >= COUNTERS.poison.lose;
+        } else {
+          const lifeHit = o.mode === 'dmg' || S.cmdLife, nl = q.life - (lifeHit ? d : 0);
+          info = `${num(q.life)}${d && lifeHit ? ' → ' + num(nl) : ''}`;
+          leth = P.lose0 && nl <= 0;
+          if (o.mode === 'cmd') {
+            const c = ((q.cmd[o.pid] || [])[o.ci] || 0) + d;
+            info += ` · Cmd ${c}`; leth = leth || c >= 21;
+          }
+        }
+        return `<div class="cmdrow${leth ? ' lethal' : ''}"><span class="cn"><b class="dot" style="background:${q.color}"></b><span class="an">${esc(q.name)}<small>${info}</small></span></span>` +
+          stp('d', d, `data-p="${q.id}"`) + `<button class="p5" data-a="d5" data-p="${q.id}">+5</button></div>`;
+      }).join('')}</div>
+        <div class="row2"><button class="btn" data-a="all1">Alle +1</button><button class="btn" data-a="clr">Zurücksetzen</button></div>
+        <button class="srow" data-a="ll"><span>Lifelink<small>${esc(p.name)} gewinnt +${sum} Life</small></span><i class="sw${o.ll ? ' on' : ''}"></i></button>
+        ${o.mode === 'cmd' && !S.cmdLife ? '<p class="mut small">Commander Damage wird laut Einstellungen nicht vom Life abgezogen.</p>' : ''}
+        <button class="btn pri wide" data-a="go"${sum ? '' : ' disabled'}>${sum ? `${sum} ${o.mode === 'inf' ? 'Poison' : o.mode === 'cmd' ? 'Commander Damage' : 'Damage'} eintragen` : 'Schaden oben verteilen'}</button>`;
+      return h;
+    },
+    act: {
+      src: (a, e, o) => { o.pid = +a.dataset.p; o.dmg = {}; renderSheet(o, true); },
+      mode: (a, e, o) => { o.mode = a.dataset.k; renderSheet(o, true); },
+      ci: (a, e, o) => { o.ci = +a.dataset.i; renderSheet(o, true); },
+      d: (a, e, o) => { const k = +a.dataset.p; o.dmg[k] = Math.max(0, (o.dmg[k] || 0) + (+a.dataset.d)); hap(5); renderSheet(o, true); },
+      d5: (a, e, o) => { const k = +a.dataset.p; o.dmg[k] = (o.dmg[k] || 0) + 5; hap(5); renderSheet(o, true); },
+      all1: (a, e, o) => { foes(o.pid).forEach(q => { o.dmg[q.id] = (o.dmg[q.id] || 0) + 1; }); hap(5); renderSheet(o, true); },
+      clr: (a, e, o) => { o.dmg = {}; renderSheet(o, true); },
+      ll: (a, e, o) => { o.ll = !o.ll; renderSheet(o, true); },
+      go: (a, e, o) => {
+        const p = state.players[o.pid], hit = foes(o.pid).filter(q => o.dmg[q.id] > 0); if (!hit.length) return;
+        const sum = hit.reduce((s, q) => s + o.dmg[q.id], 0);
+        const what = o.mode === 'inf' ? 'Infect' : o.mode === 'cmd' ? 'Commander Damage' : 'Damage';
+        closeSheet(o);
+        bulk(`Angriff (${what}): ${hit.map(q => `${q.name} ${o.dmg[q.id]}`).join(', ')}${o.ll ? ` · Lifelink +${sum}` : ''}`, p.id, () => {
+          hit.forEach(q => {
+            const d = o.dmg[q.id];
+            if (o.mode === 'inf') ctrTo(q, 'poison', d);
+            else if (o.mode === 'cmd') {
+              const arr = q.cmd[p.id] || (q.cmd[p.id] = [0, 0]);
+              arr[o.ci] = (arr[o.ci] || 0) + d;
+              addLog({ type: 'cmd', pid: q.id, from: p.id, d, v: arr[o.ci] });
+              if (S.cmdLife) lifeTo(q, -d);
+            } else lifeTo(q, -d);
+            // Combat Damage an Monarch / Initiative: Angreifer übernimmt
+            if (S.autoMonarch) for (const f of ['monarch', 'initiative']) if (state[f] === q.id) giveGlobal(f, p.id, 'Combat Damage');
+          });
+          if (o.ll) lifeTo(p, sum);
+        });
+        toast(`⚔ ${sum} ${what}${o.ll ? ` · Lifelink +${sum}` : ''}`, { rot: o.rot });
+      }
+    }
+  });
+}
+
+/* ---------- Proliferate: +1 auf jeden gewählten Counter ---------- */
+const PROLIF = ['poison', 'energy', 'exp', 'rad'];
+// Vorauswahl: eigene Energy/XP, bei Gegnern Poison und Rad
+function prolifDefault(src) {
+  const sel = {};
+  state.players.forEach(q => { if (status(q).out) return; PROLIF.forEach(k => {
+    if ((q.ctr[k] || 0) > 0 && (q.id === src ? k === 'energy' || k === 'exp' : k === 'poison' || k === 'rad')) sel[q.id + ':' + k] = true;
+  }); });
+  return sel;
+}
+function openProlif(src, rot) {
+  hap(8);
+  const pid = srcOf(src);
+  openSheet({
+    title: '☣ Proliferate', rot: rot || 0, pid, sel: prolifDefault(pid),
+    render(o) {
+      const rows = state.players.filter(q => !status(q).out && PROLIF.some(k => q.ctr[k] > 0));
+      const n = Object.keys(o.sel).filter(k => o.sel[k]).length;
+      return `<h4>Wer proliferiert?</h4><div class="pchips">${psrc(o.pid)}</div>
+        <h4>Counter wählen <small class="mut">· jeder gewählte +1</small></h4>
+        ${rows.map(q => `<div class="plrow"><div class="qhead"><b class="dot" style="background:${q.color}"></b>${esc(q.name)}</div><div class="tgs">${PROLIF.filter(k => q.ctr[k] > 0).map(k => {
+          const on = !!o.sel[q.id + ':' + k], v = q.ctr[k];
+          return `<button class="tg${on ? ' on' : ''}" data-a="t" data-k="${q.id}:${k}">${COUNTERS[k].n} ${v}${on ? ' → ' + (v + 1) : ''}</button>`;
+        }).join('')}</div></div>`).join('') || '<p class="mut small">Noch niemand hat Poison, Energy, Experience oder Rad counters.</p>'}
+        ${rows.length ? '<div class="row2"><button class="btn" data-a="all">Alle wählen</button><button class="btn" data-a="none">Keine</button></div>' : ''}
+        <button class="btn pri wide" data-a="go"${n ? '' : ' disabled'}>Proliferate${n ? ` (${n} Counter)` : ''}</button>`;
+    },
+    act: {
+      src: (a, e, o) => { o.pid = +a.dataset.p; o.sel = prolifDefault(o.pid); renderSheet(o, true); },
+      t: (a, e, o) => { o.sel[a.dataset.k] = !o.sel[a.dataset.k]; hap(5); renderSheet(o, true); },
+      all: (a, e, o) => { state.players.forEach(q => { if (!status(q).out) PROLIF.forEach(k => { if (q.ctr[k] > 0) o.sel[q.id + ':' + k] = true; }); }); renderSheet(o, true); },
+      none: (a, e, o) => { o.sel = {}; renderSheet(o, true); },
+      go: (a, e, o) => {
+        const pick = Object.keys(o.sel).filter(k => o.sel[k]).map(k => k.split(':')).filter(([i, k]) => state.players[+i] && state.players[+i].ctr[k] > 0);
+        if (!pick.length) return;
+        const p = state.players[o.pid];
+        closeSheet(o);
+        bulk(`Proliferate: ${pick.map(([i, k]) => `${state.players[+i].name} ${COUNTERS[k].s}`).join(', ')}`, p.id, () => {
+          pick.forEach(([i, k]) => ctrTo(state.players[+i], k, 1));
+        });
+        toast(`☣ Proliferate · ${pick.length} Counter +1`, { rot: o.rot });
+      }
+    }
+  });
+}
+
+/* ---------- Commander gewirkt: Tax automatisch +2 ---------- */
+const taxGame = () => preset().ctr.includes('tax');
+function castCommander(pid, rot) {
+  const p = state.players[pid]; flushPending(); snap(null);
+  addLog({ type: 'event', pid, text: 'Commander cast' });
+  ctrTo(p, 'tax', COUNTERS.tax.step);
+  hap(15); afterChange(pid);
+  toast(`🪄 ${esc(p.name)}: Commander cast · Tax ${p.ctr.tax}`, { rot: rot != null ? rot : rotOf(pid), ms: 1500 });
 }
 
 /* ---------- Würfel ---------- */
@@ -954,6 +1154,9 @@ function fingerPicker() {
 
 /* ---------- Ereignisse ---------- */
 function logEvent(o, t) {
+  if (t === 'Commander cast' && taxGame()) { // erhöht Commander Tax gleich mit
+    castCommander(o.pid != null ? o.pid : state.active, o.rot); renderSheet(o, true); return;
+  }
   snap(null);
   addLog({ type: 'event', pid: o.pid, text: t }); saveSoon(); hap(15);
   toast('⚑ ' + esc(t), { rot: o.rot, ms: 1000 }); renderSheet(o, true);

@@ -12,7 +12,9 @@ input{font:inherit;color:inherit;user-select:text;-webkit-user-select:text}
 small{font-size:.85em}
 
 /* ---------- Spielfeld ---------- */
-#board{position:fixed;inset:0;display:grid;gap:var(--gap);padding:var(--gap);touch-action:none}
+/* --safe-v / --safe-h setzt die App (Kamera-Aussparung, symmetrisch); nur das Spielfeld hält Abstand */
+#board{position:fixed;inset:0;display:grid;gap:var(--gap);touch-action:none;
+  padding:calc(var(--gap) + var(--safe-v,0px)) calc(var(--gap) + var(--safe-h,0px))}
 .cell{position:relative;container-type:size;min-width:0;min-height:0}
 .panel{--pc:#888;position:absolute;left:50%;top:50%;width:100cqw;height:100cqh;
   transform:translate(-50%,-50%) rotate(var(--rot,0deg));container-type:size;border-radius:16px;overflow:hidden;

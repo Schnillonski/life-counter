@@ -65,14 +65,15 @@ const PRESETS = {
   swu: { n: 'Star Wars Unlimited', g: 'SWU', start: 30, players: 2, step: 1, big: 5, label: 'Base HP', ctr: ['misc'], lose0: true, ev: 'gen', doc: 'other', checks: ['Resource'], quick: [30, 28, 25] },
   custom: { n: 'Eigenes Spiel', g: 'Frei', start: 20, players: 2, step: 1, big: 10, ctr: ['misc', 'misc2'], lose0: true, ev: 'gen', doc: 'modes', quick: [10, 20, 30, 50, 100] }
 };
-/* Sitzordnung im Uhrzeigersinn: [grid-area, Drehung]; hub = Position des Menüknopfs */
+/* Sitzordnung im Uhrzeigersinn: [grid-area, Drehung]; hub = Position des Menüknopfs (berücksichtigt den Spielfeld-Rand) */
+const SV = 'var(--safe-v,0px)', SH = 'var(--safe-h,0px)', THIRD = `calc(${SV} + (100% - 2 * ${SV}) / 3)`;
 const LAYOUTS = {
-  1: { c: '1fr', r: '1fr', s: [['1/1', 0]], hub: ['calc(100% - 40px)', '40px'] },
-  2: { c: '1fr', r: '1fr 1fr', s: [['2/1', 0], ['1/1', 180]], hub: ['44px', '50%'] },
-  3: { c: '1fr 1fr', r: '1fr 1fr', s: [['2/1', 90], ['1/1/2/3', 180], ['2/2', 270]], hub: ['44px', '50%'] },
+  1: { c: '1fr', r: '1fr', s: [['1/1', 0]], hub: [`calc(100% - ${SH} - 40px)`, `calc(${SV} + 40px)`] },
+  2: { c: '1fr', r: '1fr 1fr', s: [['2/1', 0], ['1/1', 180]], hub: [`calc(${SH} + 44px)`, '50%'] },
+  3: { c: '1fr 1fr', r: '1fr 1fr', s: [['2/1', 90], ['1/1/2/3', 180], ['2/2', 270]], hub: [`calc(${SH} + 44px)`, '50%'] },
   4: { c: '1fr 1fr', r: '1fr 1fr', s: [['2/1', 90], ['1/1', 90], ['1/2', 270], ['2/2', 270]], hub: ['50%', '50%'] },
-  5: { c: '1fr 1fr', r: '1fr 1fr 1fr', s: [['3/1/4/3', 0], ['2/1', 90], ['1/1', 90], ['1/2', 270], ['2/2', 270]], hub: ['50%', '33.333%'] },
-  6: { c: '1fr 1fr', r: '1fr 1fr 1fr', s: [['3/1', 90], ['2/1', 90], ['1/1', 90], ['1/2', 270], ['2/2', 270], ['3/2', 270]], hub: ['50%', '33.333%'] }
+  5: { c: '1fr 1fr', r: '1fr 1fr 1fr', s: [['3/1/4/3', 0], ['2/1', 90], ['1/1', 90], ['1/2', 270], ['2/2', 270]], hub: ['50%', THIRD] },
+  6: { c: '1fr 1fr', r: '1fr 1fr 1fr', s: [['3/1', 90], ['2/1', 90], ['1/1', 90], ['1/2', 270], ['2/2', 270], ['3/2', 270]], hub: ['50%', THIRD] }
 };
 const DICE = [
   { k: 'coin', n: 'Münze', f: 2, s: 'Heads / Tails' }, { k: 'd4', n: 'W4', f: 4 }, { k: 'd6', n: 'W6', f: 6 },

@@ -46,6 +46,7 @@ public class MainActivity extends Activity {
 
     private WebView web;
     private Vibrator vibrator;
+    private int safeV = 0, safeH = 0; // Rand fürs Spielfeld in CSS-Pixeln
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -72,12 +73,15 @@ public class MainActivity extends Activity {
         root.addView(web, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // Inhalt nicht unter die Kamera-Aussparung legen – und symmetrisch halten:
-        // unten so viel Abstand wie oben (abgerundete Ecken, Gestenleiste), links wie rechts.
+        // Abstand für Kamera-Aussparung symmetrisch berechnen (unten wie oben, links wie rechts)
+        // und als CSS-Variablen an die Web-App geben: Nur das Spielfeld hält Abstand,
+        // Menü und Dialoge nutzen die volle Höhe.
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             Insets c = insets.getInsets(WindowInsets.Type.displayCutout());
-            int vert = Math.max(c.top, c.bottom), hor = Math.max(c.left, c.right);
-            v.setPadding(hor, vert, hor, vert);
+            float d = getResources().getDisplayMetrics().density;
+            safeV = Math.round(Math.max(c.top, c.bottom) / d);
+            safeH = Math.round(Math.max(c.left, c.right) / d);
+            pushSafeArea();
             return WindowInsets.CONSUMED;
         });
         setContentView(root);
@@ -105,6 +109,11 @@ public class MainActivity extends Activity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return !request.getUrl().toString().startsWith("file:///android_asset/");
             }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                pushSafeArea();
+            }
         });
         web.addJavascriptInterface(new Bridge(), "Android");
         web.loadUrl(START_URL);
@@ -114,6 +123,12 @@ public class MainActivity extends Activity {
                 OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
 
         hideSystemUi();
+    }
+
+    private void pushSafeArea() {
+        if (web == null) return;
+        web.evaluateJavascript("(function(s){s.setProperty('--safe-v','" + safeV + "px');s.setProperty('--safe-h','"
+                + safeH + "px');})(document.documentElement.style)", null);
     }
 
     private void handleBack() {

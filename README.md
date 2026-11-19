@@ -40,8 +40,8 @@ Eine kurze Beschreibung jedes Spielmodus und der wichtigsten Keywords steht dire
 - **Tippen** auf die linke Hälfte eines Feldes zieht ab, die rechte Hälfte addiert.
 - **Gedrückt halten** zählt in großen Schritten (±10, bei Yu-Gi-Oh! ±1000).
 - **Name oder „Details“ antippen** öffnet die Spieler-Details: Rechner, Commander Damage, Poison und weitere Zähler, Status wie Monarch, Name und Farbe.
-- **Runder Knopf** in der Mitte öffnet das Menü.
-- **„Zug beenden“** im Feld des aktiven Spielers gibt den Zug weiter.
+- **Großer farbiger Knopf** (in der Farbe des aktiven Spielers) gibt den Zug weiter.
+- **Knopf mit drei Strichen** öffnet das Menü.
 - Die **⟳-Taste** oben in jedem Dialog dreht ihn für Mitspieler auf der anderen Tischseite.
 
 Die Felder drehen sich automatisch zu den Sitzplätzen rund um das Handy. Wer lieber alle Felder gleich ausgerichtet hat, schaltet das in den Einstellungen ab.
@@ -52,6 +52,7 @@ Die Felder drehen sich automatisch zu den Sitzplätzen rund um das Handy. Wer li
 - **Wer beginnt?** Zufällige Auswahl oder Finger-Wahl – alle legen einen Finger aufs Display.
 - **Ausscheiden** passiert automatisch bei 0 Life, 10 Poison oder 21 Commander Damage und lässt sich jederzeit korrigieren.
 - **Zug-Timer** und Zugzeit pro Spieler, dazu eine kleine Checkliste (Land drop, Energy, Supporter …).
+- **Regel-Hinweise beim Zugwechsel**, z. B. „Monarch: im End Step 1 Karte ziehen“, Initiative, Day/Night, Rad und Pokémon Checkup.
 - **Merker:** Erinnerungen wie „Rhystic Study – 1 zahlen?“, die automatisch auftauchen, wenn der Spieler am Zug ist.
 - **Ereignisse:** Board Wipe, Combo, Mulligan und eigene Notizen fürs Protokoll.
 - **Protokoll** mit Verlaufsgrafik und Statistik, zum Kopieren oder Teilen.

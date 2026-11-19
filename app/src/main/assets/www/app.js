@@ -65,15 +65,19 @@ const PRESETS = {
   swu: { n: 'Star Wars Unlimited', g: 'SWU', start: 30, players: 2, step: 1, big: 5, label: 'Base HP', ctr: ['misc'], lose0: true, ev: 'gen', doc: 'other', checks: ['Resource'], quick: [30, 28, 25] },
   custom: { n: 'Eigenes Spiel', g: 'Frei', start: 20, players: 2, step: 1, big: 10, ctr: ['misc', 'misc2'], lose0: true, ev: 'gen', doc: 'modes', quick: [10, 20, 30, 50, 100] }
 };
-/* Sitzordnung im Uhrzeigersinn: [grid-area, Drehung]; hub = Position des Menüknopfs (berücksichtigt den Spielfeld-Rand) */
-const SV = 'var(--safe-v,0px)', SH = 'var(--safe-h,0px)', THIRD = `calc(${SV} + (100% - 2 * ${SV}) / 3)`;
+/* Sitzordnung im Uhrzeigersinn: [grid-area, Drehung].
+   hub = Menüknopf, next = zentraler „Nächster Zug“-Knopf. Beide sitzen auf Trennlinien/Ecken,
+   wo sie keine Namen oder Chips verdecken (berücksichtigt den Spielfeld-Rand). */
+const SV = 'var(--safe-v,0px)', SH = 'var(--safe-h,0px)';
+const THIRD = `calc(${SV} + (100% - 2 * ${SV}) / 3)`, TWO = `calc(${SV} + (100% - 2 * ${SV}) * 2 / 3)`, TOP = `calc(${SV} + 40px)`;
+const LEFT = `calc(${SH} + 44px)`, RIGHT = `calc(100% - ${SH} - 44px)`;
 const LAYOUTS = {
-  1: { c: '1fr', r: '1fr', s: [['1/1', 0]], hub: [`calc(100% - ${SH} - 40px)`, `calc(${SV} + 40px)`] },
-  2: { c: '1fr', r: '1fr 1fr', s: [['2/1', 0], ['1/1', 180]], hub: [`calc(${SH} + 44px)`, '50%'] },
-  3: { c: '1fr 1fr', r: '1fr 1fr', s: [['2/1', 90], ['1/1/2/3', 180], ['2/2', 270]], hub: [`calc(${SH} + 44px)`, '50%'] },
-  4: { c: '1fr 1fr', r: '1fr 1fr', s: [['2/1', 90], ['1/1', 90], ['1/2', 270], ['2/2', 270]], hub: ['50%', '50%'] },
-  5: { c: '1fr 1fr', r: '1fr 1fr 1fr', s: [['3/1/4/3', 0], ['2/1', 90], ['1/1', 90], ['1/2', 270], ['2/2', 270]], hub: ['50%', THIRD] },
-  6: { c: '1fr 1fr', r: '1fr 1fr 1fr', s: [['3/1', 90], ['2/1', 90], ['1/1', 90], ['1/2', 270], ['2/2', 270], ['3/2', 270]], hub: ['50%', THIRD] }
+  1: { c: '1fr', r: '1fr', s: [['1/1', 0]], hub: [`calc(100% - ${SH} - 40px)`, TOP], next: null },
+  2: { c: '1fr', r: '1fr 1fr', s: [['2/1', 0], ['1/1', 180]], hub: [LEFT, '50%'], next: [RIGHT, '50%'] },
+  3: { c: '1fr 1fr', r: '1fr 1fr', s: [['2/1', 90], ['1/1/2/3', 180], ['2/2', 270]], hub: [LEFT, '50%'], next: [RIGHT, '50%'] },
+  4: { c: '1fr 1fr', r: '1fr 1fr', s: [['2/1', 90], ['1/1', 90], ['1/2', 270], ['2/2', 270]], hub: ['50%', TOP], next: ['50%', '50%'] },
+  5: { c: '1fr 1fr', r: '1fr 1fr 1fr', s: [['3/1/4/3', 0], ['2/1', 90], ['1/1', 90], ['1/2', 270], ['2/2', 270]], hub: ['50%', TOP], next: ['50%', THIRD] },
+  6: { c: '1fr 1fr', r: '1fr 1fr 1fr', s: [['3/1', 90], ['2/1', 90], ['1/1', 90], ['1/2', 270], ['2/2', 270], ['3/2', 270]], hub: ['50%', TWO], next: ['50%', THIRD] }
 };
 const DICE = [
   { k: 'coin', n: 'Münze', f: 2, s: 'Heads / Tails' }, { k: 'd4', n: 'W4', f: 4 }, { k: 'd6', n: 'W6', f: 6 },
@@ -83,7 +87,7 @@ const DICE = [
 const DEF = {
   haptics: true, rotate: true, turns: true, turnTimer: true, checks: true, cmdLife: true, partner: false, awake: true, zones: true,
   holdMs: 450, holdMode: 'big', commitMs: 1800, shake: true, diceN: 1, diceLast: 'd20', names: [], colors: [], events: {},
-  updates: true, skipVer: '', askResume: true
+  updates: true, skipVer: '', askResume: true, hints: true
 };
 const LOG_MAX = 3000, HIST_MAX = 1500, UNDO_MAX = 80;
 
@@ -91,7 +95,7 @@ const LOG_MAX = 3000, HIST_MAX = 1500, UNDO_MAX = 80;
 let S = Object.assign({}, DEF, LS.get('lc.settings', {}));
 let games = LS.get('lc.games', []);
 let state = LS.get('lc.state', null);
-const board = document.getElementById('board'), hub = document.getElementById('hub');
+const board = document.getElementById('board'), hub = document.getElementById('hub'), nextBtn = document.getElementById('next');
 const layer = document.getElementById('layer'), toasts = document.getElementById('toasts');
 const preset = () => PRESETS[state.preset] || PRESETS.custom;
 
@@ -119,6 +123,8 @@ function hap(ms) {
   try { if (NB && NB.vibrate) NB.vibrate(ms | 0); else if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { }
 }
 function rotOf(pid) { return S.rotate ? LAYOUTS[state.players.length].s[pid][1] : 0; }
+// Dialoge immer hochkant (0° oder 180°), damit Inhalt und Tastatur Platz haben
+function sheetRot(pid) { const r = rotOf(pid); return r % 180 ? 0 : r; }
 
 /* ---------- Undo ----------
    Log und Verlauf sind append-only und werden nicht mitkopiert, nur ihre Länge.
@@ -258,16 +264,39 @@ function passTurn() {
 }
 function setActive(pid, isPass) {
   snap(null);
-  const t = now(), cur = state.players[state.active];
+  const t = now(), prev = state.active, cur = state.players[prev];
   if (cur) { cur.time += t - state.turnStart; cur.checks = {}; }
+  // Regel-Hinweise vor dem Wechsel bestimmen (z. B. Monarch zieht im End Step)
+  const H = isPass && S.hints && cur ? turnHints(prev, pid) : { out: [], inc: [] };
   state.active = pid; state.turnStart = t; state.players[pid].checks = {};
   if (isPass) state.turnNo++;
   addLog({ type: 'turn', pid });
   hap(25); renderPanels(); refreshSheets(); saveSoon();
+
   const p = state.players[pid];
-  const rs = state.reminders.filter(r => r.onTurn && (r.pid == null || r.pid === pid));
-  if (rs.length) toast(`<h5>Merker · ${esc(p.name)}</h5><ul>${rs.map(r => `<li>${esc(r.text)}</li>`).join('')}</ul><span class="tclose">Tippen zum Schließen</span>`, { rot: rotOf(pid), ms: 8000, big: true });
-  else if (isPass) toast(`Zug ${state.turnNo} · ${esc(p.name)}`, { rot: rotOf(pid), ms: 1100 });
+  const li = a => `<ul>${a.map(x => `<li>${x}</li>`).join('')}</ul>`;
+  if (H.out.length) toast(`<h5>Zugende · ${esc(cur.name)}</h5>${li(H.out)}`, { rot: rotOf(prev), ms: 3500, big: true, queue: true });
+  const inc = H.inc.concat(state.reminders.filter(r => r.onTurn && (r.pid == null || r.pid === pid)).map(r => '📌 ' + esc(r.text)));
+  if (inc.length) toast(`<h5>Zug ${state.turnNo} · ${esc(p.name)}</h5>${li(inc)}<span class="tclose">Tippen zum Schließen</span>`, { rot: rotOf(pid), ms: 4000 + 1500 * inc.length, big: true, queue: true });
+  else if (isPass) toast(`Zug ${state.turnNo} · ${esc(p.name)}`, { rot: rotOf(pid), ms: 1100, queue: true });
+}
+/* Hinweise beim Zugwechsel: out = für den Spieler, der seinen Zug beendet; inc = für den nächsten. */
+function turnHints(prev, next) {
+  const P = preset(), np = state.players[next], out = [], inc = [];
+  if (state.monarch === prev) out.push('👑 Monarch: im End Step 1 Karte ziehen');
+  if (P.dn && state.dayNight === 'day') out.push('☀️ Day: Kein Spell in diesem Zug gewirkt? → Night');
+  if (P.dn && state.dayNight === 'night') out.push('🌙 Night: 2+ Spells in diesem Zug gewirkt? → Day');
+  if (P.conds) state.players.forEach(q => { // Pokémon Checkup zwischen den Zügen
+    const c = q.conds, l = [];
+    if (c.poisoned) l.push('Poisoned +10');
+    if (c.burned) l.push('Burned +20, dann Münze');
+    if (c.asleep) l.push('Asleep: Münze');
+    if (c.paralyzed && q.id === prev) { c.paralyzed = false; l.push('Paralyzed endet (entfernt)'); }
+    if (l.length) out.push(`Checkup ${esc(q.name)}: ${l.join(', ')}`);
+  });
+  if (state.initiative === next) inc.push('🗝️ Initiative: im Upkeep venture into Undercity');
+  if ((np.ctr.rad || 0) > 0) inc.push(`☢ Rad ${np.ctr.rad}: in der Main Phase ${np.ctr.rad} Karten millen`);
+  return { out, inc };
 }
 function toggleCheck(pid, k) {
   const p = state.players[pid]; p.checks[k] = !p.checks[k]; hap(10); renderPanel(pid); saveSoon();
@@ -303,7 +332,6 @@ function renderBoard() {
       '<div class="zone minus" data-z="-1"><span>−</span></div><div class="zone plus" data-z="1"><span>+</span></div><div class="pc"></div></div></div>';
   }).join('');
   $$('.zone', board).forEach(bindZone);
-  hub.style.left = L.hub[0]; hub.style.top = L.hub[1];
   document.body.classList.toggle('nozones', !S.zones);
   renderPanels();
 }
@@ -331,10 +359,7 @@ function renderPanel(pid) {
     p.cmd[f].forEach(v => { if (v) chips += `<button class="chip${v >= 21 ? ' lethal' : ''}" data-act="player"><b style="background:${q.color}"></b>Cmd ${v}</button>`; });
   }
   let foot = chips + '<button class="chip" data-act="player">Details</button>';
-  if (act) {
-    if (S.checks && P.checks) foot += P.checks.map(c => `<button class="chip chk${p.checks[c] ? ' on' : ''}" data-act="check" data-k="${esc(c)}">${p.checks[c] ? '✓ ' : ''}${esc(c)}</button>`).join('');
-    foot += '<button class="chip pass" data-act="pass">Zug beenden ›</button>';
-  }
+  if (act && S.checks && P.checks) foot += P.checks.map(c => `<button class="chip chk${p.checks[c] ? ' on' : ''}" data-act="check" data-k="${esc(c)}">${p.checks[c] ? '✓ ' : ''}${esc(c)}</button>`).join('');
 
   const b = bub[pid], len = String(Math.abs(p.life)).length + (p.life < 0 ? 1 : 0);
   const low = P.lose0 && p.life > 0 && p.life <= Math.max(1, Math.round(P.start * 0.25));
@@ -350,6 +375,14 @@ function renderPanel(pid) {
 }
 
 function updateHub() {
+  const L = LAYOUTS[state.players.length], showNext = !!(S.turns && L.next);
+  const hp = showNext ? L.hub : (L.next || L.hub); // ohne Zugverfolgung sitzt das Menü zentral
+  hub.style.left = hp[0]; hub.style.top = hp[1];
+  nextBtn.hidden = !showNext;
+  if (showNext) {
+    nextBtn.style.left = L.next[0]; nextBtn.style.top = L.next[1];
+    nextBtn.style.setProperty('--nc', state.players[state.active].color);
+  }
   const rc = state.reminders.length;
   hub.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>' +
     (rc ? `<span class="hb">${rc}</span>` : '') +
@@ -390,17 +423,29 @@ board.addEventListener('click', e => {
   }
 });
 hub.addEventListener('click', () => { hap(10); openMenu(); });
+nextBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 4.5l10 7.5-10 7.5z"/><rect x="16.5" y="4.5" width="3" height="15" rx="1.2"/></svg>';
+let nextAt = 0;
+nextBtn.addEventListener('click', () => { // Schutz gegen versehentlichen Doppeltipp
+  const t = now(); if (t - nextAt < 700) return; nextAt = t; passTurn();
+});
 
 /* ================= Hinweise ================= */
-let toastT = 0;
+// o.queue: Hinweis wartet, bis der aktuelle verschwunden ist (z. B. Zugende, dann Zugbeginn)
+let toastT = 0, toastOn = false;
+const toastQ = [];
 function toast(msg, o = {}) {
+  if (o.queue && toastOn) { toastQ.push([msg, o]); return; }
   const t = document.createElement('div');
   t.className = 'toast' + (o.big ? ' big' : '');
   t.style.setProperty('--rot', (o.rot || 0) + 'deg');
   t.innerHTML = msg;
-  toasts.replaceChildren(t);
-  clearTimeout(toastT); toastT = setTimeout(() => t.remove(), o.ms || 1500);
-  if (o.big) t.addEventListener('click', () => { clearTimeout(toastT); t.remove(); });
+  toasts.replaceChildren(t); toastOn = true;
+  const hide = () => {
+    clearTimeout(toastT); t.remove(); toastOn = false;
+    const n = toastQ.shift(); if (n) toast(n[0], n[1]);
+  };
+  clearTimeout(toastT); toastT = setTimeout(hide, o.ms || 1500);
+  if (o.big) t.addEventListener('click', hide);
 }
 
 /* ================= Dialoge ================= */
@@ -551,7 +596,7 @@ function openPlayer(pid) {
   hap(8);
   const P0 = preset();
   openSheet({
-    title: esc(state.players[pid].name), rot: rotOf(pid), pid, buf: '', more: false, calc: !!P0.calc,
+    title: esc(state.players[pid].name), rot: sheetRot(pid), pid, buf: '', more: false, calc: !!P0.calc,
     render(o) {
       const p = state.players[o.pid], P = preset(), st = status(p);
       let h = `<div class="mainrow">
@@ -1049,6 +1094,7 @@ function openSettings() {
       ${T('turns', 'Zugverfolgung', 'Aktiver Spieler, „Zug beenden“, Merker bei Zugbeginn')}
       ${T('turnTimer', 'Zug-Timer', 'Laufende Zeit im aktiven Feld')}
       ${T('checks', 'Zug-Checkliste', 'z. B. Land drop, Energy, Supporter')}
+      ${T('hints', 'Regel-Hinweise beim Zugwechsel', 'Monarch, Initiative, Day/Night, Rad, Pokémon Checkup')}
       ${T('awake', 'Bildschirm anlassen', 'Display geht während des Spiels nicht aus')}
       ${T('askResume', 'Beim Start nachfragen', '„Runde fortsetzen oder neues Spiel?“ nach dem Beenden der App')}
       <h4>Commander</h4>

@@ -40,6 +40,7 @@ Eine kurze Beschreibung jedes Spielmodus und der wichtigsten Keywords steht dire
 - **Tippen** auf die linke Hälfte eines Feldes zieht ab, die rechte Hälfte addiert.
 - **Gedrückt halten** zählt in großen Schritten (±10, bei Yu-Gi-Oh! ±1000).
 - **Name oder „Details“ antippen** öffnet die Spieler-Details: Rechner, Commander Damage, Poison und weitere Zähler, Status wie Monarch, Name und Farbe.
+- **Chips im Feld antippen** (Monarch, Poison, Cmd …) öffnet ein Kurzmenü, z. B. „Monarch übernehmen“ für den Spieler am Zug oder einen Regler nur für diesen Zähler.
 - **Großer farbiger Knopf** (in der Farbe des aktiven Spielers) gibt den Zug weiter.
 - **Knopf mit drei Strichen** öffnet das Menü.
 - Die **⟳-Taste** oben in jedem Dialog dreht ihn für Mitspieler auf der anderen Tischseite.

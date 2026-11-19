@@ -17,6 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: JavaScript prüfen (Syntaxfehler stoppen den Build vor dem Release)
+        run: for f in app/src/main/assets/www/*.js; do node --check "$f"; done
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

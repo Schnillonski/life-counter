@@ -36,9 +36,9 @@ const COUNTERS = {
   misc: { n: 'Counter', s: '#1', c: '#cfd6e4', neg: true, doc: '-' },
   misc2: { n: 'Counter 2', s: '#2', c: '#9ee6e0', neg: true, doc: '-' }
 };
-const FLAGS = {
-  monarch: { n: 'Monarch', s: '👑 Monarch', g: 1 },
-  initiative: { n: 'Initiative', s: 'Initiative', g: 1 },
+const FLAGS = { // g = gehört immer genau einem Spieler (wird übernommen)
+  monarch: { n: 'Monarch', s: '👑 Monarch', g: 1, i: '👑', take: 'Monarch übernehmen', now: 'ist jetzt Monarch' },
+  initiative: { n: 'Initiative', s: 'Initiative', g: 1, i: '🗝️', take: 'Initiative übernehmen', now: 'hat die Initiative – venture into Undercity' },
   blessing: { n: "City's Blessing", s: 'Blessing' },
   vstar: { n: 'VSTAR Power used', s: 'VSTAR ✓', doc: 'VSTAR Power' },
   gx: { n: 'GX Attack used', s: 'GX ✓', doc: 'GX Attack' }
@@ -302,11 +302,20 @@ function toggleCheck(pid, k) {
   const p = state.players[pid]; p.checks[k] = !p.checks[k]; hap(10); renderPanel(pid); saveSoon();
 }
 function toggleFlag(pid, f) {
-  const F = FLAGS[f], p = state.players[pid]; snap(null); let on;
-  if (F.g) { on = state[f] !== pid; state[f] = on ? pid : null; }
-  else { on = !p.flags[f]; p.flags[f] = on; }
+  const F = FLAGS[f], p = state.players[pid];
+  if (F.g) { setGlobal(f, state[f] === pid ? null : pid); return; }
+  snap(null); const on = !p.flags[f]; p.flags[f] = on;
   addLog({ type: 'sys', pid, text: `${p.name}: ${F.n} ${on ? '✓' : '✗'}` });
   hap(15); renderPanels(); refreshSheets(); saveSoon();
+}
+// Monarch / Initiative an einen Spieler geben (oder mit null entfernen)
+function setGlobal(f, pid) {
+  const F = FLAGS[f], old = state[f]; if (old === pid) return;
+  snap(null); state[f] = pid;
+  const nm = i => state.players[i].name;
+  addLog({ type: 'sys', pid: pid != null ? pid : old, text: pid == null ? `${F.n} entfernt` : `${nm(pid)} übernimmt ${F.n}${old != null ? ' von ' + nm(old) : ''}` });
+  hap(25); renderPanels(); refreshSheets(); saveSoon();
+  if (pid != null) toast(`${F.i} ${esc(nm(pid))} ${F.now}`, { rot: rotOf(pid), ms: 2200 });
 }
 function toggleCond(pid, k) {
   const p = state.players[pid]; snap(null); const on = !p.conds[k];
@@ -345,18 +354,19 @@ function renderPanel(pid) {
   el.classList.toggle('active', act); el.classList.toggle('out', !!st.out); el.classList.toggle('win', !!st.win);
 
   // Chips unten: alles, was gerade relevant ist – als lesbarer Text
+  // Jeder Chip öffnet ein passendes Kurzmenü (openQuick)
   let chips = '';
-  if (state.monarch === pid) chips += `<button class="chip" data-act="player">${FLAGS.monarch.s}</button>`;
-  if (state.initiative === pid) chips += `<button class="chip" data-act="player">${FLAGS.initiative.s}</button>`;
-  for (const f in p.flags) if (p.flags[f] && FLAGS[f]) chips += `<button class="chip" data-act="player">${FLAGS[f].s}</button>`;
-  for (const c in p.conds) if (p.conds[c] && CONDS[c]) chips += `<button class="chip" data-act="player">${CONDS[c].n}</button>`;
+  if (state.monarch === pid) chips += `<button class="chip" data-act="flag" data-k="monarch">${FLAGS.monarch.s}</button>`;
+  if (state.initiative === pid) chips += `<button class="chip" data-act="flag" data-k="initiative">${FLAGS.initiative.s}</button>`;
+  for (const f in p.flags) if (p.flags[f] && FLAGS[f]) chips += `<button class="chip" data-act="flag" data-k="${f}">${FLAGS[f].s}</button>`;
+  for (const c in p.conds) if (p.conds[c] && CONDS[c]) chips += `<button class="chip" data-act="cond" data-k="${c}">${CONDS[c].n}</button>`;
   for (const k of new Set(P.ctr.concat(Object.keys(p.ctr)))) {
     const v = p.ctr[k], C = COUNTERS[k];
-    if (v && C) chips += `<button class="chip${C.lose && v >= C.lose ? ' lethal' : ''}" data-act="player">${C.s} <span style="color:${C.c}">${v}</span></button>`;
+    if (v && C) chips += `<button class="chip${C.lose && v >= C.lose ? ' lethal' : ''}" data-act="ctr" data-k="${k}">${C.s} <span style="color:${C.c}">${v}</span></button>`;
   }
   if (P.cmd) for (const f in p.cmd) {
     const q = state.players[f]; if (!q) continue;
-    p.cmd[f].forEach(v => { if (v) chips += `<button class="chip${v >= 21 ? ' lethal' : ''}" data-act="player"><b style="background:${q.color}"></b>Cmd ${v}</button>`; });
+    p.cmd[f].forEach((v, i) => { if (v) chips += `<button class="chip${v >= 21 ? ' lethal' : ''}" data-act="cmd" data-f="${f}" data-i="${i}"><b style="background:${q.color}"></b>Cmd ${v}</button>`; });
   }
   let foot = chips + '<button class="chip" data-act="player">Details</button>';
   if (act && S.checks && P.checks) foot += P.checks.map(c => `<button class="chip chk${p.checks[c] ? ' on' : ''}" data-act="check" data-k="${esc(c)}">${p.checks[c] ? '✓ ' : ''}${esc(c)}</button>`).join('');
@@ -418,8 +428,8 @@ board.addEventListener('click', e => {
   const pid = +a.closest('.panel').dataset.pid;
   switch (a.dataset.act) {
     case 'player': case 'calc': openPlayer(pid); break;
-    case 'pass': passTurn(); break;
     case 'check': toggleCheck(pid, a.dataset.k); break;
+    case 'flag': case 'cond': case 'ctr': case 'cmd': openQuick(pid, a.dataset.act, a.dataset.k, +a.dataset.f); break;
   }
 });
 hub.addEventListener('click', () => { hap(10); openMenu(); });
@@ -569,6 +579,7 @@ function openMenu() {
           ${mbtn('dice', '🎲', 'Würfel & Münze')}
           ${mbtn('first', '🎯', 'Wer beginnt?')}
           ${P.dn ? mbtn('dn', state.dayNight === 'night' ? '🌙' : '☀️', 'Day/Night: ' + dn) : ''}
+          ${['monarch', 'initiative'].filter(f => (P.flags || []).includes(f)).map(f => mbtn('g_' + f, FLAGS[f].i, FLAGS[f].n + ': ' + (state[f] != null ? esc(state.players[state[f]].name) : '–'))).join('')}
         </div>
         <h4>Notizen</h4><div class="mgrid">
           ${mbtn('event', '⚑', 'Ereignis')}
@@ -584,6 +595,8 @@ function openMenu() {
     },
     act: {
       pass: () => { closeAll(); passTurn(); }, undo: () => undo(), dice: () => openDice(), first: () => openFirst(), dn: () => cycleDN(),
+      g_monarch: () => openQuick(state.monarch != null ? state.monarch : state.active, 'flag', 'monarch'),
+      g_initiative: () => openQuick(state.initiative != null ? state.initiative : state.active, 'flag', 'initiative'),
       event: () => openEvent(null, 0), rem: () => openRem(null, 0), log: () => openLog(),
       new: () => openNew(), settings: () => openSettings(), docs: () => openDocs(),
       restart: () => confirmBox('Spiel mit gleichen Einstellungen und Namen neu starten?', 'Neustart', () => { closeAll(); startGame(state.preset, state.players.length, state.start); })
@@ -688,6 +701,74 @@ function openPlayer(pid) {
       saveS(); saveSoon(); renderPanel(o.pid);
     },
     enter: el => el.blur()
+  });
+}
+
+/* ---------- Kurzmenüs für Chips (Monarch übernehmen, Zähler, Commander Damage …) ---------- */
+function docText(q) {
+  if (!window.DOCS || !q || q === '-') return '';
+  q = q.toLowerCase(); let best = '';
+  for (const t of window.DOCS.tabs) for (const it of t.items) {
+    if (it.length < 2) continue;
+    const n = it[0].toLowerCase();
+    if (n === q) return it[1];
+    if (!best && n.startsWith(q)) best = it[1];
+  }
+  return best;
+}
+function openQuick(pid, kind, k, from) {
+  const isG = kind === 'flag' && FLAGS[k].g, turns = S.turns && state.players.length > 1;
+  // Monarch/Initiative übernimmt meist der Spieler am Zug -> zu ihm drehen
+  const rot = isG && turns ? sheetRot(state.active) : sheetRot(pid);
+  const term = kind === 'flag' ? (FLAGS[k].doc || FLAGS[k].n) : kind === 'cond' ? CONDS[k].n :
+    kind === 'ctr' ? (COUNTERS[k].doc || COUNTERS[k].n) : 'Commander Damage';
+  const title = kind === 'flag' ? FLAGS[k].n : kind === 'cond' ? 'Special Conditions' : kind === 'ctr' ? COUNTERS[k].n : 'Commander Damage';
+  const who = p => `<div class="qhead"><b class="dot" style="background:${p.color}"></b>${esc(p.name)}</div>`;
+  hap(8);
+  openSheet({
+    title: esc(title), rot, pid, kind, k, qf: from,
+    render(o) {
+      const p = state.players[o.pid]; let h = '';
+      if (isG) {
+        const F = FLAGS[k], holder = state[k], a = state.players[state.active];
+        if (turns && holder !== state.active) h += `<button class="btn pri wide" style="margin-top:6px" data-a="give" data-p="${state.active}">${F.i} ${esc(a.name)}: ${F.take}</button>`;
+        h += `<h4>Wer hat ${F.n}?</h4><div class="pgrid">${state.players.map(q => `<button class="pcard${holder === q.id ? ' on' : ''}" data-a="give" data-p="${q.id}"><b><span class="dot" style="background:${q.color}"></span> ${esc(q.name)}</b><span>${holder === q.id ? 'hat ' + F.n : 'übernimmt'}</span></button>`).join('')}</div>`;
+        if (holder != null) h += `<button class="btn warn wide" data-a="give" data-p="">${F.n} entfernen</button>`;
+      } else if (kind === 'flag') {
+        const on = !!p.flags[k];
+        h += who(p) + `<button class="btn ${on ? 'warn' : 'pri'} wide" style="margin-top:0" data-a="toggle">${FLAGS[k].n} ${on ? 'entfernen' : 'setzen'}</button>`;
+      } else if (kind === 'cond') {
+        h += who(p) + `<div class="tgs">${Object.keys(CONDS).map(c => `<button class="tg${p.conds[c] ? ' on' : ''}" data-a="cond" data-k="${c}">${CONDS[c].n}</button>`).join('')}</div>
+          <button class="btn wide" data-a="heal">Alle heilen</button>`;
+      } else if (kind === 'ctr') {
+        const C = COUNTERS[k], v = p.ctr[k] || 0, st = C.step || 1;
+        h += who(p) + `<div class="bigstep"><button data-a="ctr" data-d="-1">−${st}</button><b class="${C.lose && v >= C.lose ? 'lethal' : ''}">${v}</b><button data-a="ctr" data-d="1">+${st}</button></div>` +
+          (C.lose ? `<p class="mut small">Ab ${C.lose} ${C.n} verliert ${esc(p.name)}.</p>` : C.max ? `<p class="mut small">Maximal ${C.max}.</p>` : '');
+      } else if (kind === 'cmd') {
+        const q = state.players[o.qf], a = p.cmd[o.qf] || [0, 0];
+        h += `<div class="qhead"><b class="dot" style="background:${q.color}"></b>${esc(q.name)} → <b class="dot" style="background:${p.color}"></b>${esc(p.name)}</div>` +
+          (S.partner ? [0, 1] : [0]).map(i => `${S.partner ? `<h4>Commander ${i + 1}</h4>` : ''}<div class="bigstep"><button data-a="cmd" data-i="${i}" data-d="-1">−1</button><b class="${(a[i] || 0) >= 21 ? 'lethal' : ''}">${a[i] || 0}</b><button data-a="cmd" data-i="${i}" data-d="1">+1</button></div>`).join('') +
+          `<p class="mut small">Tödlich ab 21 von demselben Commander.${S.cmdLife ? ' Wird automatisch vom Life abgezogen.' : ''}</p>`;
+      }
+      const txt = docText(term);
+      if (txt) h += `<h4>Regel</h4><p class="small" style="margin:0">${esc(txt)}</p>`;
+      h += `<div class="row2"><button class="btn" data-a="details">Alle Details</button><button class="btn" data-a="doc">ⓘ Doku</button></div>`;
+      return h;
+    },
+    act: {
+      give: (a, e, o) => { const v = a.dataset.p; setGlobal(o.k, v === '' ? null : +v); closeSheet(o); },
+      toggle: (a, e, o) => { toggleFlag(o.pid, o.k); closeSheet(o); },
+      cond: (a, e, o) => toggleCond(o.pid, a.dataset.k),
+      heal: (a, e, o) => {
+        const p = state.players[o.pid]; snap(null); p.conds = {};
+        addLog({ type: 'sys', pid: p.id, text: `${p.name}: Special Conditions geheilt` });
+        hap(15); afterChange(o.pid); closeSheet(o);
+      },
+      ctr: (a, e, o) => changeCtr(o.pid, o.k, (+a.dataset.d) * (COUNTERS[o.k].step || 1)),
+      cmd: (a, e, o) => changeCmd(o.pid, o.qf, +a.dataset.i, +a.dataset.d),
+      details: (a, e, o) => { closeSheet(o); openPlayer(o.pid); },
+      doc: (a, e, o) => openDocs(null, term, o.rot)
+    }
   });
 }
 

@@ -423,7 +423,8 @@ function openSheet(o) {
     }
     if (o.act && o.act[n]) o.act[n](a, e, o);
   });
-  // Nach einer Wischbewegung keinen Klick auslösen
+  // Nach einer Wischbewegung keinen Klick auslösen (Merker gilt nur für genau diese Geste)
+  ov.addEventListener('pointerdown', () => { o.dragged = false; }, true);
   ov.addEventListener('click', e => { if (o.dragged) { o.dragged = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
   bindRotatedScroll(o);
   ov.addEventListener('input', e => { if (o.input) o.input(e.target, o); });
@@ -441,7 +442,6 @@ function bindRotatedScroll(o) {
   let pid = null, sx = 0, sy = 0, st = 0, drag = false, lastV = 0, lastP = 0, lastT = 0, raf = 0;
   const localDy = (dx, dy) => { const r = o.rot * Math.PI / 180; return -Math.sin(r) * dx + Math.cos(r) * dy; };
   b.addEventListener('pointerdown', e => {
-    if (pid === null) o.dragged = false;
     if (!o.rot || pid !== null) return;
     cancelAnimationFrame(raf);
     pid = e.pointerId; sx = e.clientX; sy = e.clientY; st = b.scrollTop; drag = false; lastV = 0;
@@ -463,6 +463,8 @@ function bindRotatedScroll(o) {
     if (e.pointerId !== pid) return;
     pid = null;
     if (!drag) { o.dragged = false; return; }
+    // Ein evtl. folgender Klick kommt synchron nach pointerup – danach verfällt der Merker.
+    setTimeout(() => { o.dragged = false; }, 0);
     let v = lastV * 16; // px pro Frame
     const step = () => {
       if (Math.abs(v) < 0.4) return;

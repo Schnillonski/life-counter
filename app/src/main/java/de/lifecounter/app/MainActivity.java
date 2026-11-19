@@ -72,10 +72,12 @@ public class MainActivity extends Activity {
         root.addView(web, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // Inhalt nicht unter die Kamera-Aussparung legen
+        // Inhalt nicht unter die Kamera-Aussparung legen – und symmetrisch halten:
+        // unten so viel Abstand wie oben (abgerundete Ecken, Gestenleiste), links wie rechts.
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             Insets c = insets.getInsets(WindowInsets.Type.displayCutout());
-            v.setPadding(c.left, c.top, c.right, c.bottom);
+            int vert = Math.max(c.top, c.bottom), hor = Math.max(c.left, c.right);
+            v.setPadding(hor, vert, hor, vert);
             return WindowInsets.CONSUMED;
         });
         setContentView(root);

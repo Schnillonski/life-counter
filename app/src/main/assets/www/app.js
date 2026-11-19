@@ -364,9 +364,15 @@ function renderPanel(pid) {
     const v = p.ctr[k], C = COUNTERS[k];
     if (v && C) chips += `<button class="chip${C.lose && v >= C.lose ? ' lethal' : ''}" data-act="ctr" data-k="${k}">${C.s} <span style="color:${C.c}">${v}</span></button>`;
   }
+  // Treffer-Chip: Commander Damage vom Spieler am Zug schnell eintragen
+  const hitFrom = P.cmd && S.turns && state.players.length > 1 && state.active !== pid && !st.out ? state.active : null;
   if (P.cmd) for (const f in p.cmd) {
-    const q = state.players[f]; if (!q) continue;
+    const q = state.players[f]; if (!q || +f === hitFrom) continue;
     p.cmd[f].forEach((v, i) => { if (v) chips += `<button class="chip${v >= 21 ? ' lethal' : ''}" data-act="cmd" data-f="${f}" data-i="${i}"><b style="background:${q.color}"></b>Cmd ${v}</button>`; });
+  }
+  if (hitFrom != null) {
+    const q = state.players[hitFrom], a = p.cmd[hitFrom] || [0, 0], tot = (a[0] || 0) + (a[1] || 0);
+    chips = `<button class="chip hit${a[0] >= 21 || a[1] >= 21 ? ' lethal' : ''}" data-act="cmd" data-f="${hitFrom}" data-i="0"><b style="background:${q.color}"></b>⚔ Cmd ${tot || '+'}</button>` + chips;
   }
   let foot = chips + '<button class="chip" data-act="player">Details</button>';
   if (act && S.checks && P.checks) foot += P.checks.map(c => `<button class="chip chk${p.checks[c] ? ' on' : ''}" data-act="check" data-k="${esc(c)}">${p.checks[c] ? '✓ ' : ''}${esc(c)}</button>`).join('');
@@ -747,7 +753,8 @@ function openQuick(pid, kind, k, from) {
       } else if (kind === 'cmd') {
         const q = state.players[o.qf], a = p.cmd[o.qf] || [0, 0];
         h += `<div class="qhead"><b class="dot" style="background:${q.color}"></b>${esc(q.name)} → <b class="dot" style="background:${p.color}"></b>${esc(p.name)}</div>` +
-          (S.partner ? [0, 1] : [0]).map(i => `${S.partner ? `<h4>Commander ${i + 1}</h4>` : ''}<div class="bigstep"><button data-a="cmd" data-i="${i}" data-d="-1">−1</button><b class="${(a[i] || 0) >= 21 ? 'lethal' : ''}">${a[i] || 0}</b><button data-a="cmd" data-i="${i}" data-d="1">+1</button></div>`).join('') +
+          (S.partner ? [0, 1] : [0]).map(i => `${S.partner ? `<h4>Commander ${i + 1}</h4>` : ''}` +
+            `<div class="qamts">${[1, 2, 3, 4, 5, 6, 7, 8].map(n => `<button data-a="hit" data-i="${i}" data-d="${n}">+${n}</button>`).join('')}</div><div class="bigstep"><button data-a="cmd" data-i="${i}" data-d="-1">−1</button><b class="${(a[i] || 0) >= 21 ? 'lethal' : ''}">${a[i] || 0}</b><button data-a="cmd" data-i="${i}" data-d="1">+1</button></div>`).join('') +
           `<p class="mut small">Tödlich ab 21 von demselben Commander.${S.cmdLife ? ' Wird automatisch vom Life abgezogen.' : ''}</p>`;
       }
       const txt = docText(term);
@@ -766,6 +773,7 @@ function openQuick(pid, kind, k, from) {
       },
       ctr: (a, e, o) => changeCtr(o.pid, o.k, (+a.dataset.d) * (COUNTERS[o.k].step || 1)),
       cmd: (a, e, o) => changeCmd(o.pid, o.qf, +a.dataset.i, +a.dataset.d),
+      hit: (a, e, o) => { changeCmd(o.pid, o.qf, +a.dataset.i, +a.dataset.d); closeSheet(o); },
       details: (a, e, o) => { closeSheet(o); openPlayer(o.pid); },
       doc: (a, e, o) => openDocs(null, term, o.rot)
     }

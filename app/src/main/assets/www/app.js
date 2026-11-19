@@ -87,7 +87,7 @@ const DICE = [
   { k: 'd20', n: 'W20', f: 20 }, { k: 'd100', n: 'W100', f: 100 }, { k: 'planar', n: 'Planar', f: 6, s: 'Planechase' }
 ];
 const DEF = {
-  haptics: true, rotate: true, turns: true, turnTimer: true, checks: true, cmdLife: true, partner: false, awake: true, zones: true,
+  haptics: true, rotate: true, turns: true, turnTimer: true, checks: true, cmdLife: true, autoMonarch: true, partner: false, awake: true, zones: true,
   holdMs: 450, holdMode: 'big', commitMs: 1800, shake: true, diceN: 1, diceLast: 'd20', names: [], colors: [], events: {},
   updates: true, skipVer: '', askResume: true, hints: true
 };
@@ -210,7 +210,13 @@ function changeCmd(pid, from, idx, d) {
   arr[idx] = v; const real = v - old;
   if (S.cmdLife) { p.life -= real; bubble(pid, -real); }
   accum(key, real, tot => { if (tot) { addLog({ type: 'cmd', pid, from, d: tot, v: arr[idx] }); pushHist(); } });
+  // Commander Damage ist Combat Damage: Wer den Monarch / die Initiative trifft, übernimmt sie.
+  let moved = false;
+  if (real > 0 && S.autoMonarch && from !== pid && state.players[from] && !status(state.players[from]).out) {
+    for (const f of ['monarch', 'initiative']) if (state[f] === pid) { giveGlobal(f, from, 'Combat Damage'); moved = true; }
+  }
   hap(8); afterChange(pid);
+  if (moved) renderPanels(); // Symbol wandert auch ins Feld des Angreifers
 }
 function afterChange(pid) {
   if (checkStatus()) renderPanels(); else renderPanel(pid);
@@ -241,6 +247,9 @@ function checkStatus() {
     if (s.out) {
       addLog({ type: 'sys', pid: p.id, text: `${p.name} ist ausgeschieden (${s.out})` });
       toast(`${esc(p.name)} ist raus`, { rot: rotOf(p.id) }); hap(150); newOut = true;
+      // Regel: Verlässt der Monarch / Initiative-Spieler das Spiel, geht sie an den Spieler am Zug
+      // (bzw. an den nächsten in Zugreihenfolge, wenn der Ausscheidende selbst am Zug ist).
+      for (const f of ['monarch', 'initiative']) if (state[f] === p.id) giveGlobal(f, heirOf(p.id), `${p.name} ist raus`);
     } else if (s.win) {
       addLog({ type: 'sys', pid: p.id, text: `${p.name} gewinnt (${s.win})` });
       toast(`🏆 ${esc(p.name)} gewinnt!`, { rot: rotOf(p.id), ms: 3000 }); hap(200);
@@ -310,14 +319,27 @@ function toggleFlag(pid, f) {
   addLog({ type: 'sys', pid, text: `${p.name}: ${F.n} ${on ? '✓' : '✗'}` });
   hap(15); renderPanels(); refreshSheets(); saveSoon();
 }
-// Monarch / Initiative an einen Spieler geben (oder mit null entfernen)
+// Monarch / Initiative von Hand an einen Spieler geben (oder mit null entfernen)
 function setGlobal(f, pid) {
+  if (state[f] === pid) return;
+  snap(null); giveGlobal(f, pid);
+  renderPanels(); refreshSheets(); saveSoon();
+}
+// Übergabe ohne eigenen Undo-Schritt (wird auch automatisch ausgelöst); reason erscheint im Protokoll
+function giveGlobal(f, pid, reason) {
   const F = FLAGS[f], old = state[f]; if (old === pid) return;
-  snap(null); state[f] = pid;
-  const nm = i => state.players[i].name;
-  addLog({ type: 'sys', pid: pid != null ? pid : old, text: pid == null ? `${F.n} entfernt` : `${nm(pid)} übernimmt ${F.n}${old != null ? ' von ' + nm(old) : ''}` });
-  hap(25); renderPanels(); refreshSheets(); saveSoon();
-  if (pid != null) toast(`${F.i} ${esc(nm(pid))} ${F.now}`, { rot: rotOf(pid), ms: 2200 });
+  state[f] = pid;
+  const nm = i => state.players[i].name, why = reason ? ` (${reason})` : '';
+  addLog({ type: 'sys', pid: pid != null ? pid : old, text: pid == null ? `${F.n} entfernt` : `${nm(pid)} übernimmt ${F.n}${old != null ? ' von ' + nm(old) : ''}${why}` });
+  hap(25);
+  if (pid != null) toast(`${F.i} ${esc(nm(pid))} ${F.now}${reason ? `<br><small>${esc(reason)}</small>` : ''}`, { rot: rotOf(pid), ms: 2400, queue: !!reason });
+}
+// Wer erbt Monarch/Initiative, wenn pid ausscheidet: Spieler am Zug, sonst der nächste lebende in Zugreihenfolge
+function heirOf(pid) {
+  const n = state.players.length, alive = i => i !== pid && !status(state.players[i]).out;
+  if (alive(state.active)) return state.active;
+  for (let k = 1; k < n; k++) { const i = (pid + k) % n; if (alive(i)) return i; }
+  return null;
 }
 function toggleCond(pid, k) {
   const p = state.players[pid]; snap(null); const on = !p.conds[k];
@@ -368,7 +390,8 @@ function renderPanel(pid) {
     // Oben beim Namen: bisheriger Commander Damage aller anderen Gegner.
     const hitFrom = S.turns && state.players.length > 1 && state.active !== pid && !st.out ? state.active : null;
     const tot = f => (p.cmd[f][0] || 0) + (p.cmd[f][1] || 0);
-    const src = Object.keys(p.cmd).map(Number).filter(f => f !== hitFrom && state.players[f] && tot(f));
+    // Ausgeschiedene Gegner zählen nicht mehr (ihr Commander hat das Spiel verlassen)
+    const src = Object.keys(p.cmd).map(Number).filter(f => f !== hitFrom && state.players[f] && tot(f) && !status(state.players[f]).out);
     if (src.length) {
       const leth = src.some(f => p.cmd[f][0] >= 21 || p.cmd[f][1] >= 21);
       badges += `<button class="bdg${leth ? ' lethal' : ''}" data-act="cmdhead" data-f="${src.length === 1 ? src[0] : ''}">⚔ ${src.map(f => `<b class="cd" style="background:${state.players[f].color}"></b>${tot(f)}`).join(' ')}</button>`;
@@ -647,7 +670,7 @@ function openPlayer(pid) {
       h += `<button class="lnk" data-a="calcT">${o.calc ? 'Rechner ausblenden' : 'Rechner öffnen'}</button>`;
 
       if (P.cmd && state.players.length > 1) {
-        h += `<h4>Commander Damage erhalten <small>· tödlich ab 21</small><button class="hlink" data-a="doc" data-q="Commander Damage">ⓘ</button></h4><div class="cmds">${state.players.filter(q => q.id !== p.id).map(q => {
+        h += `<h4>Commander Damage erhalten <small>· tödlich ab 21</small><button class="hlink" data-a="doc" data-q="Commander Damage">ⓘ</button></h4><div class="cmds">${state.players.filter(q => q.id !== p.id && !status(q).out).map(q => {
           const a = p.cmd[q.id] || [0, 0], leth = a[0] >= 21 || a[1] >= 21;
           return `<div class="cmdrow${leth ? ' lethal' : ''}"><span class="cn"><b class="dot" style="background:${q.color}"></b>${esc(q.name)}</span>` +
             stp('cmd', a[0], `data-f="${q.id}" data-i="0"`, a[0] >= 21 ? 'lethal' : '') +
@@ -1206,6 +1229,7 @@ function openSettings() {
       ${T('askResume', 'Beim Start nachfragen', '„Runde fortsetzen oder neues Spiel?“ nach dem Beenden der App')}
       <h4>Commander</h4>
       ${T('cmdLife', 'Commander Damage zieht Life ab', 'Automatisch vom Leben abziehen')}
+      ${T('autoMonarch', 'Monarch/Initiative automatisch übergeben', 'Bei eingetragenem Commander Damage (= Combat Damage) übernimmt der Angreifer')}
       ${T('partner', 'Partner (zwei Commander)', 'Zweiter Zähler pro Gegner')}
       <h4>Updates</h4>
       ${T('updates', 'Beim Start nach Updates suchen', 'Prüft die neueste Version im GitHub-Repo')}

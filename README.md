@@ -45,18 +45,26 @@ Das Repo liegt unter `github.com/Schnillonski/life-counter`. Für lokale Builds 
 Android installiert ein Update nur, wenn es mit **demselben Schlüssel** signiert ist wie die installierte App.
 Ohne festen Schlüssel erzeugt jeder CI-Lauf einen neuen Debug-Key, und Updates schlagen mit „App nicht installiert“ fehl.
 
-```bash
-keytool -genkeypair -v -keystore lifecounter.jks -alias lifecounter \
-  -keyalg RSA -keysize 4096 -validity 10000
-# Schlüsseldatei gut aufheben (nicht ins Repo – .gitignore schließt *.jks aus)
+Ohne Java geht das mit dem `openssl` aus Git für Windows (bzw. jedem Linux):
 
-gh secret set LC_KEYSTORE_BASE64 < <(base64 -w0 lifecounter.jks)
-gh secret set LC_KEYSTORE_PASSWORD     # Passwort eingeben
-gh secret set LC_KEY_ALIAS --body lifecounter
-gh secret set LC_KEY_PASSWORD          # Passwort eingeben
+```bash
+openssl req -x509 -newkey rsa:4096 -sha256 -days 10000 -nodes \
+  -keyout key.pem -out cert.pem -subj "/CN=Life Counter"
+openssl pkcs12 -export -inkey key.pem -in cert.pem -name lifecounter -out lifecounter.p12 \
+  -keypbe AES-256-CBC -certpbe AES-256-CBC -macalg sha256
+rm key.pem cert.pem
+base64 -w0 lifecounter.p12 > LC_KEYSTORE_BASE64.txt
 ```
 
-Ohne `gh` geht das auch im Browser unter *Settings › Secrets and variables › Actions*.
+`lifecounter.p12` und das Passwort sicher aufbewahren und nicht ins Repo legen. Danach unter
+*Settings › Secrets and variables › Actions* vier Secrets anlegen:
+
+| Secret | Wert |
+|---|---|
+| `LC_KEYSTORE_BASE64` | Inhalt von `LC_KEYSTORE_BASE64.txt` |
+| `LC_KEYSTORE_PASSWORD` | Passwort |
+| `LC_KEY_ALIAS` | `lifecounter` |
+| `LC_KEY_PASSWORD` | dasselbe Passwort (bei PKCS12 identisch) |
 
 ### 3. Version veröffentlichen
 

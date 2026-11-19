@@ -11,5 +11,8 @@ captures/
 
 # Schlüssel niemals committen
 *.jks
+*.p12
+*.pem
 *.keystore
+*BASE64*.txt
 keystore.properties

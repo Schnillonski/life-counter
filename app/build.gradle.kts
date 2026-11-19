@@ -35,6 +35,7 @@ android {
         create("release") {
             if (keystorePath != null && file(keystorePath).exists()) {
                 storeFile = file(keystorePath)
+                storeType = "pkcs12"   // per openssl erzeugt; liest dank Java-Kompatibilität auch .jks
                 storePassword = secret("LC_KEYSTORE_PASSWORD")
                 keyAlias = secret("LC_KEY_ALIAS")
                 keyPassword = secret("LC_KEY_PASSWORD")

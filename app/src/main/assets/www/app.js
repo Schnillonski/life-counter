@@ -416,15 +416,61 @@ function openSheet(o) {
     if (!a) { if (e.target === ov || e.target === o.frame) closeSheet(o); return; }
     const n = a.dataset.a;
     if (n === '_close') return closeSheet(o);
-    if (n === '_rot') { o.rot = (o.rot + 90) % 360; o.frame.classList.toggle('side', o.rot % 180 !== 0); o.frame.style.setProperty('--rot', o.rot + 'deg'); return; }
+    if (n === '_rot') {
+      o.rot = (o.rot + 90) % 360; o.frame.classList.toggle('side', o.rot % 180 !== 0); o.frame.style.setProperty('--rot', o.rot + 'deg');
+      o.body.style.touchAction = o.rot ? 'none' : ''; return;
+    }
     if (o.act && o.act[n]) o.act[n](a, e, o);
   });
+  // Nach einer Wischbewegung keinen Klick auslösen
+  ov.addEventListener('click', e => { if (o.dragged) { o.dragged = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+  bindRotatedScroll(o);
   ov.addEventListener('input', e => { if (o.input) o.input(e.target, o); });
   ov.addEventListener('keydown', e => { if (e.key === 'Enter' && o.enter) { e.preventDefault(); o.enter(e.target, o); } });
   layer.appendChild(ov); sheets.push(o);
   renderSheet(o, true);
   if (o.onOpen) o.onOpen(o);
   return o;
+}
+/* Gedrehte Dialoge: Die WebView scrollt rotierte Container per Touch nicht zuverlässig.
+   Deshalb wird die Wischbewegung hier selbst in die lokale Scrollrichtung umgerechnet (mit Schwung). */
+function bindRotatedScroll(o) {
+  const b = o.body;
+  b.style.touchAction = o.rot ? 'none' : '';
+  let pid = null, sx = 0, sy = 0, st = 0, drag = false, lastV = 0, lastP = 0, lastT = 0, raf = 0;
+  const localDy = (dx, dy) => { const r = o.rot * Math.PI / 180; return -Math.sin(r) * dx + Math.cos(r) * dy; };
+  b.addEventListener('pointerdown', e => {
+    if (pid === null) o.dragged = false;
+    if (!o.rot || pid !== null) return;
+    cancelAnimationFrame(raf);
+    pid = e.pointerId; sx = e.clientX; sy = e.clientY; st = b.scrollTop; drag = false; lastV = 0;
+    lastP = 0; lastT = e.timeStamp;
+  });
+  b.addEventListener('pointermove', e => {
+    if (e.pointerId !== pid) return;
+    const d = localDy(e.clientX - sx, e.clientY - sy);
+    if (!drag) {
+      if (Math.hypot(e.clientX - sx, e.clientY - sy) < 8) return;
+      drag = true; o.dragged = true;
+      try { b.setPointerCapture(pid); } catch (x) { }
+    }
+    b.scrollTop = st - d;
+    const dt = e.timeStamp - lastT;
+    if (dt > 0) { lastV = (d - lastP) / dt; lastP = d; lastT = e.timeStamp; }
+  });
+  const end = e => {
+    if (e.pointerId !== pid) return;
+    pid = null;
+    if (!drag) { o.dragged = false; return; }
+    let v = lastV * 16; // px pro Frame
+    const step = () => {
+      if (Math.abs(v) < 0.4) return;
+      b.scrollTop -= v; v *= 0.94; raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+  };
+  b.addEventListener('pointerup', end);
+  b.addEventListener('pointercancel', end);
 }
 function renderSheet(o, force) {
   if (!force) { const a = document.activeElement; if (a && a.tagName === 'INPUT' && o.body.contains(a)) return; }

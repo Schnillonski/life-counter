@@ -1,0 +1,68 @@
+name: Build & Release APK
+
+# Push auf main  -> APK als Artefakt (zum Testen)
+# Tag v1.2.3      -> GitHub Release mit APK (das findet der Update-Check in der App)
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Version bestimmen
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "APP_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "APP_VERSION=$(grep '^appVersion=' gradle.properties | cut -d= -f2)" >> "$GITHUB_ENV"
+          fi
+
+      - name: Release-Schlüssel einrichten
+        env:
+          KS_B64: ${{ secrets.LC_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "LC_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Kein Secret LC_KEYSTORE_BASE64 – APK wird mit wechselndem Debug-Key signiert, Updates lassen sich dann nicht drüberinstallieren."
+          fi
+
+      - name: APK bauen
+        env:
+          LC_KEYSTORE_PASSWORD: ${{ secrets.LC_KEYSTORE_PASSWORD }}
+          LC_KEY_ALIAS: ${{ secrets.LC_KEY_ALIAS }}
+          LC_KEY_PASSWORD: ${{ secrets.LC_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon \
+            -PappVersion="$APP_VERSION" \
+            -PupdateRepo="$GITHUB_REPOSITORY"
+          cp app/build/outputs/apk/release/app-release.apk "LifeCounter-$APP_VERSION.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LifeCounter-${{ env.APP_VERSION }}
+          path: LifeCounter-*.apk
+
+      - name: GitHub Release erstellen
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: LifeCounter-*.apk
+          generate_release_notes: true

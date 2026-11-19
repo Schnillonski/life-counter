@@ -1,112 +1,67 @@
 # Life Counter
 
-Offline-Lebenspunktezähler für Android 14+ für Magic (Commander, Standard/Modern, Brawl, Oathbreaker), Pokémon TCG, Yu-Gi-Oh!, Lorcana, Flesh and Blood, Star Wars Unlimited und eigene Spiele.
-Die Bedienung ist auf Deutsch, die Spielbegriffe sind auf Englisch (Poison, Commander Damage, Prize Cards …).
+Ein schlichter Lebenspunktezähler für Kartenspielrunden am Tisch: Magic: The Gathering (vor allem Commander), Pokémon TCG, Yu-Gi-Oh!, Lorcana, Flesh and Blood, Star Wars Unlimited und eigene Spiele.
 
-## Funktionen
+Die Bedienung ist auf Deutsch, die Spielbegriffe sind auf Englisch – so wie sie auf den Karten stehen (Poison, Commander Damage, Prize Cards …).
 
-- **1–6 Spieler**, Felder drehen sich zu den Sitzplätzen (abschaltbar)
-- **Tippen** links/rechts = −/+, **Halten** = große Schritte (±10, YGO ±1000) oder schnelles Zählen
-- **Magic:** Commander Damage pro Gegner (auch Partner), Poison, Commander Tax, Energy, Experience, Storm, Rad, Speed, Monarch, Initiative, City's Blessing, Day/Night
-- **Pokémon:** Prize Cards, Damage am Active, Special Conditions (Asleep/Confused/Paralyzed schließen sich aus), VSTAR/GX
-- **Yu-Gi-Oh!:** 8000 LP, Rechner (Abziehen, Addieren, Setzen, Halbieren)
-- **Lorcana:** zählt Lore bis 20
-- Automatisches Ausscheiden (0 Life, 10 Poison, 21 Commander Damage), korrigierbar
-- Zugverfolgung mit Timer, Zugzeiten, Checkliste (Land drop, Energy, Supporter …)
-- Würfel (Münze, W4–W100, Planechase), Startspieler per Zufall oder Finger-Wahl
-- Ereignisse, Merker mit Erinnerung bei Zugbeginn, Protokoll mit Grafik und Statistik
-- **Doku:** Spielmodi und Keywords (Magic, Pokémon, Yu-Gi-Oh!, Lorcana, FaB, SWU) mit Suche
-- Rückgängig, Spielhistorie, automatisches Speichern
-- **Update-Check** beim Start gegen die GitHub-Releases dieses Repos
+## Download
 
-## Aufbau
+**[Neueste Version herunterladen](https://github.com/Schnillonski/life-counter/releases/latest)** – dort die Datei `LifeCounter-x.y.z.apk` antippen.
 
-```text
-app/src/main/java/.../MainActivity.java   Vollbild-WebView, Bridge (Vibration, Teilen, Update-Check)
-app/src/main/assets/www/                  die App: index.html, style.css, app.js, docs.js
-.github/workflows/build.yml               CI: baut die APK, bei Tags auch ein Release
-```
+1. APK auf dem Handy herunterladen und öffnen.
+2. Android fragt einmal, ob der Browser Apps installieren darf: erlauben.
+3. „Installieren“ tippen.
 
-Keine externen Bibliotheken. Netzwerk wird nur für den Update-Check genutzt (`api.github.com`).
-Die Web-App lässt sich im Desktop-Browser testen, indem man `app/src/main/assets/www/index.html` öffnet.
+Voraussetzung: Android 14 oder neuer.
 
----
+### Updates
 
-## Einrichtung auf GitHub (einmalig)
+Die App schaut beim Start nach, ob es eine neue Version gibt, und bietet sie zum Herunterladen an. Einfach über die alte Version installieren – Spielstand und Einstellungen bleiben erhalten. In den Einstellungen lässt sich das abschalten oder per „Jetzt prüfen“ von Hand auslösen.
 
-Das Repo muss **öffentlich** sein, sonst kann die App die Releases ohne Login nicht abfragen.
+## Spiele
 
-### 1. Repo anlegen und hochladen
+| Spiel | Start | Besonderheiten |
+|---|---|---|
+| Commander | 40 Life, 4 Spieler | Commander Damage pro Gegner (auch Partner), Commander Tax, Monarch, Initiative |
+| Standard / Modern | 20 Life | Poison, Energy, Day/Night |
+| Brawl | 25 Life | ohne Commander Damage |
+| Oathbreaker | 20 Life, 4 Spieler | Commander Tax |
+| Pokémon TCG | 6 Prize Cards | Damage am Active, Special Conditions, VSTAR/GX |
+| Yu-Gi-Oh! | 8000 LP | Rechner zum Abziehen, Addieren, Halbieren |
+| Lorcana | 0 Lore | zählt hoch bis 20 |
+| Flesh and Blood | 40 Life | Startwert je nach Hero anpassbar |
+| Star Wars Unlimited | 30 Base HP | Startwert je nach Base anpassbar |
+| Eigenes Spiel | frei wählbar | zwei zusätzliche Zähler |
 
-Das Repo liegt unter `github.com/Schnillonski/life-counter`. Für lokale Builds steht es in `gradle.properties` (`updateRepo`), die CI setzt es automatisch.
+Eine kurze Beschreibung jedes Spielmodus und der wichtigsten Keywords steht direkt in der App unter **Menü › Doku & Regeln** – mit Suche.
 
-### 2. Release-Schlüssel erzeugen (wichtig für Updates)
+## Bedienung
 
-Android installiert ein Update nur, wenn es mit **demselben Schlüssel** signiert ist wie die installierte App.
-Ohne festen Schlüssel erzeugt jeder CI-Lauf einen neuen Debug-Key, und Updates schlagen mit „App nicht installiert“ fehl.
+- **Tippen** auf die linke Hälfte eines Feldes zieht ab, die rechte Hälfte addiert.
+- **Gedrückt halten** zählt in großen Schritten (±10, bei Yu-Gi-Oh! ±1000).
+- **Name oder „Details“ antippen** öffnet die Spieler-Details: Rechner, Commander Damage, Poison und weitere Zähler, Status wie Monarch, Name und Farbe.
+- **Runder Knopf** in der Mitte öffnet das Menü.
+- **„Zug beenden“** im Feld des aktiven Spielers gibt den Zug weiter.
+- Die **⟳-Taste** oben in jedem Dialog dreht ihn für Mitspieler auf der anderen Tischseite.
 
-Ohne Java geht das mit dem `openssl` aus Git für Windows (bzw. jedem Linux):
+Die Felder drehen sich automatisch zu den Sitzplätzen rund um das Handy. Wer lieber alle Felder gleich ausgerichtet hat, schaltet das in den Einstellungen ab.
 
-```bash
-openssl req -x509 -newkey rsa:4096 -sha256 -days 10000 -nodes \
-  -keyout key.pem -out cert.pem -subj "/CN=Life Counter"
-openssl pkcs12 -export -inkey key.pem -in cert.pem -name lifecounter -out lifecounter.p12 \
-  -keypbe AES-256-CBC -certpbe AES-256-CBC -macalg sha256
-rm key.pem cert.pem
-base64 -w0 lifecounter.p12 > LC_KEYSTORE_BASE64.txt
-```
+## Weitere Funktionen
 
-`lifecounter.p12` und das Passwort sicher aufbewahren und nicht ins Repo legen. Danach unter
-*Settings › Secrets and variables › Actions* vier Secrets anlegen:
+- **Würfel & Münze:** W4 bis W100, mehrere Würfel mit Summe, Planechase-Würfel. Handy schütteln würfelt erneut.
+- **Wer beginnt?** Zufällige Auswahl oder Finger-Wahl – alle legen einen Finger aufs Display.
+- **Ausscheiden** passiert automatisch bei 0 Life, 10 Poison oder 21 Commander Damage und lässt sich jederzeit korrigieren.
+- **Zug-Timer** und Zugzeit pro Spieler, dazu eine kleine Checkliste (Land drop, Energy, Supporter …).
+- **Merker:** Erinnerungen wie „Rhystic Study – 1 zahlen?“, die automatisch auftauchen, wenn der Spieler am Zug ist.
+- **Ereignisse:** Board Wipe, Combo, Mulligan und eigene Notizen fürs Protokoll.
+- **Protokoll** mit Verlaufsgrafik und Statistik, zum Kopieren oder Teilen.
+- **Rückgängig** für die letzten Aktionen.
+- **Runde fortsetzen:** Nach dem Beenden fragt die App beim nächsten Start, ob die Runde weitergeht oder ein neues Spiel beginnt.
 
-| Secret | Wert |
-|---|---|
-| `LC_KEYSTORE_BASE64` | Inhalt von `LC_KEYSTORE_BASE64.txt` |
-| `LC_KEYSTORE_PASSWORD` | Passwort |
-| `LC_KEY_ALIAS` | `lifecounter` |
-| `LC_KEY_PASSWORD` | dasselbe Passwort (bei PKCS12 identisch) |
+## Datenschutz
 
-### 3. Version veröffentlichen
+Die App funktioniert komplett offline. Spielstände und Einstellungen bleiben auf dem Handy. Es gibt keine Werbung, keine Konten und kein Tracking. Die einzige Verbindung ins Internet ist der Update-Check, der bei GitHub nach der neuesten Version fragt.
 
-```bash
-git tag v1.1.0
-git push origin v1.1.0
-```
+## Probleme oder Wünsche?
 
-Die CI baut die signierte APK `LifeCounter-1.1.0.apk` und legt ein GitHub-Release an.
-Die erste Version installierst du von dort. Ab dann meldet die App beim Start neue Releases, und „Herunterladen“ lädt die APK im Browser.
-Die Version kommt immer aus dem Tag (`v1.2.0` → versionName 1.2.0, versionCode 10200), sie muss also nur steigen.
-
-Ein Push auf `main` ohne Tag baut nur ein Test-Artefakt (unter *Actions*) und erzeugt kein Release.
-
----
-
-## Lokal bauen
-
-Voraussetzungen: JDK 17+ (empfohlen 21), Android SDK Platform 35, Gradle 9.x.
-
-```bash
-./gradlew assembleRelease
-# APK: app/build/outputs/apk/release/app-release.apk
-```
-
-Damit lokale Builds dieselbe Signatur haben wie die Releases, trage den Schlüssel in `~/.gradle/gradle.properties` ein
-(`LC_KEYSTORE`, `LC_KEYSTORE_PASSWORD`, `LC_KEY_ALIAS`, `LC_KEY_PASSWORD`, siehe Vorlage in `gradle.properties`).
-
-### Linux arm64 / Asahi Linux
-
-Das Android SDK gibt es für Linux offiziell nur für x86_64. Gradle, AGP, d8, apksigner und sdkmanager laufen als Java auch auf arm64, **aapt2 aber nicht**.
-
-1. JDK: `sudo dnf install java-21-openjdk-devel`
-2. SDK:
-   ```bash
-   mkdir -p ~/Android/Sdk/cmdline-tools && cd ~/Android/Sdk/cmdline-tools
-   # commandlinetools-linux-*_latest.zip von developer.android.com/studio laden, entpacken, Ordner in "latest" umbenennen
-   ~/Android/Sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
-   echo "sdk.dir=$HOME/Android/Sdk" > local.properties
-   ```
-3. Native arm64-aapt2 besorgen (z. B. <https://github.com/lzhiyong/android-sdk-tools/releases>) und in `gradle.properties` eintragen:
-   `android.aapt2FromMavenOverride=/pfad/zu/aapt2`
-4. `./gradlew assembleRelease`
-
-Einfacher ist es, gar nicht lokal zu bauen: Tag pushen und die APK aus dem GitHub-Release nehmen.
+Einfach ein [Issue](https://github.com/Schnillonski/life-counter/issues) anlegen.

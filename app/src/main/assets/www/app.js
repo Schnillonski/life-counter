@@ -993,7 +993,6 @@ function openNew() {
 }
 
 /* ---------- Runde fortsetzen? (nach Kaltstart) ---------- */
-function hasProgress(s) { return s.log.some(e => e.type !== 'sys') || s.players.some(p => p.life !== s.start); }
 function ago(ms) {
   const m = Math.floor(ms / 60000);
   if (m < 1) return 'gerade eben';
@@ -1128,7 +1127,7 @@ renderBoard();
 if (NB && NB.keepAwake) NB.keepAwake(!!S.awake);
 const afterStart = () => { if (S.updates) setTimeout(() => checkUpdate(false), 800); };
 if (first) { setTimeout(openNew, 200); afterStart(); }
-else if (S.askResume && hasProgress(state)) openResume(afterStart);
+else if (S.askResume) openResume(afterStart); // jeder Kaltstart mit gespeichertem Spiel
 else afterStart();
 
 })();

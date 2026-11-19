@@ -82,7 +82,7 @@ const DICE = [
 const DEF = {
   haptics: true, rotate: true, turns: true, turnTimer: true, checks: true, cmdLife: true, partner: false, awake: true, zones: true,
   holdMs: 450, holdMode: 'big', commitMs: 1800, shake: true, diceN: 1, diceLast: 'd20', names: [], colors: [], events: {},
-  updates: true, skipVer: ''
+  updates: true, skipVer: '', askResume: true
 };
 const LOG_MAX = 3000, HIST_MAX = 1500, UNDO_MAX = 80;
 
@@ -110,7 +110,7 @@ function valid(s) { return s && s.v === 1 && Array.isArray(s.players) && s.playe
 
 let saveT = null;
 function saveSoon() { clearTimeout(saveT); saveT = setTimeout(saveNow, 400); }
-function saveNow() { clearTimeout(saveT); saveT = null; LS.set('lc.state', state); }
+function saveNow() { clearTimeout(saveT); saveT = null; state.lastSeen = now(); LS.set('lc.state', state); }
 function saveS() { LS.set('lc.settings', S); }
 
 function hap(ms) {
@@ -991,6 +991,39 @@ function openNew() {
   });
 }
 
+/* ---------- Runde fortsetzen? (nach Kaltstart) ---------- */
+function hasProgress(s) { return s.log.some(e => e.type !== 'sys') || s.players.some(p => p.life !== s.start); }
+function ago(ms) {
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return 'gerade eben';
+  if (m < 60) return `vor ${m} Min.`;
+  if (m < 1440) return `vor ${Math.floor(m / 60)} Std.`;
+  return 'am ' + new Date(now() - ms).toLocaleDateString('de-DE');
+}
+function openResume(after) {
+  const P = preset(), t = now(), last = state.lastSeen || t, gap = Math.max(0, t - last);
+  openSheet({
+    title: 'Runde fortsetzen?', done: false,
+    render: () => `<div class="stat"><div><b>${esc(P.n)}</b><span>${state.players.length} Spieler · Zug ${state.turnNo}</span></div>
+        <div class="clk"><b>${fmtT(last - state.startedAt)}</b><span>zuletzt ${ago(gap)}</span></div></div>
+      <div class="resume">${state.players.map(p => { const s = status(p);
+        return `<div class="rrow"><b class="dot" style="background:${p.color}"></b><span>${esc(p.name)}${s.out ? ' <small class="mut">☠ raus</small>' : s.win ? ' <small class="mut">🏆</small>' : ''}</span><b>${num(p.life)}</b></div>`; }).join('')}</div>
+      <div class="row2"><button class="btn" data-a="new">Neues Spiel</button><button class="btn pri" data-a="go">Fortsetzen</button></div>
+      <button class="lnk" data-a="restart">Gleiches Spiel neu starten</button>`,
+    act: {
+      go: (a, e, o) => closeSheet(o),
+      new: (a, e, o) => { o.done = true; closeSheet(o); openNew(); },
+      restart: (a, e, o) => { o.done = true; closeSheet(o); startGame(state.preset, state.players.length, state.start); }
+    },
+    onClose(o) {
+      if (!o.done) { // Fortsetzen: geschlossene Zeit nicht als Spiel-/Zugzeit zählen
+        state.turnStart += gap; state.startedAt += gap; saveNow(); renderPanels();
+      }
+      if (after) after();
+    }
+  });
+}
+
 /* ---------- Einstellungen ---------- */
 function applySettings(k) {
   document.body.classList.toggle('nozones', !S.zones);
@@ -1015,6 +1048,7 @@ function openSettings() {
       ${T('turnTimer', 'Zug-Timer', 'Laufende Zeit im aktiven Feld')}
       ${T('checks', 'Zug-Checkliste', 'z. B. Land drop, Energy, Supporter')}
       ${T('awake', 'Bildschirm anlassen', 'Display geht während des Spiels nicht aus')}
+      ${T('askResume', 'Beim Start nachfragen', '„Runde fortsetzen oder neues Spiel?“ nach dem Beenden der App')}
       <h4>Commander</h4>
       ${T('cmdLife', 'Commander Damage zieht Life ab', 'Automatisch vom Leben abziehen')}
       ${T('partner', 'Partner (zwei Commander)', 'Zweiter Zähler pro Gegner')}
@@ -1091,7 +1125,9 @@ if (!valid(state)) { state = makeGame('commander', 4, 40); first = true; }
 state.reminders = state.reminders || []; state.dice = state.dice || []; state.hist = state.hist || [];
 renderBoard();
 if (NB && NB.keepAwake) NB.keepAwake(!!S.awake);
-if (first) setTimeout(openNew, 200);
-if (S.updates) setTimeout(() => checkUpdate(false), 1500);
+const afterStart = () => { if (S.updates) setTimeout(() => checkUpdate(false), 800); };
+if (first) { setTimeout(openNew, 200); afterStart(); }
+else if (S.askResume && hasProgress(state)) openResume(afterStart);
+else afterStart();
 
 })();

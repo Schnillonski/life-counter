@@ -56,9 +56,13 @@ body.nozones .zone span{visibility:hidden}
 .foot{position:absolute;bottom:0;left:0;right:0;display:flex;flex-wrap:wrap-reverse;justify-content:center;gap:6px;padding:0 8px max(8px,3cqh)}
 .chip{position:relative;display:inline-flex;align-items:center;gap:.35em;font-size:clamp(14px,7cqh,18px);font-weight:600;padding:.45em .85em;border-radius:10px;
   background:rgba(0,0,0,.32);font-variant-numeric:tabular-nums;white-space:nowrap}
+/* Status-Symbole und ••• neben dem Namen */
+.bdg{position:relative;font-size:clamp(14px,6.5cqh,18px);font-weight:700;padding:.25em .5em;border-radius:10px;background:rgba(0,0,0,.28);white-space:nowrap}
+.bdg.more{letter-spacing:.08em;color:rgba(255,255,255,.8)}
 /* größere, unsichtbare Tippfläche */
-.chip::after,.name::after{content:"";position:absolute;inset:-4px}
+.chip::after,.name::after,.bdg::after{content:"";position:absolute;inset:-4px}
 .name{position:relative}
+.chip small{opacity:.75}
 .chip b{width:.65em;height:.65em;border-radius:50%;display:inline-block}
 .chip.lethal{background:#b3202e}
 .chip.chk{color:rgba(255,255,255,.7)}

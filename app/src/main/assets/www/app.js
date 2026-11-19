@@ -37,12 +37,14 @@ const COUNTERS = {
   misc2: { n: 'Counter 2', s: '#2', c: '#9ee6e0', neg: true, doc: '-' }
 };
 const FLAGS = { // g = gehört immer genau einem Spieler (wird übernommen)
-  monarch: { n: 'Monarch', s: '👑 Monarch', g: 1, i: '👑', take: 'Monarch übernehmen', now: 'ist jetzt Monarch' },
-  initiative: { n: 'Initiative', s: 'Initiative', g: 1, i: '🗝️', take: 'Initiative übernehmen', now: 'hat die Initiative – venture into Undercity' },
-  blessing: { n: "City's Blessing", s: 'Blessing' },
-  vstar: { n: 'VSTAR Power used', s: 'VSTAR ✓', doc: 'VSTAR Power' },
-  gx: { n: 'GX Attack used', s: 'GX ✓', doc: 'GX Attack' }
+  monarch: { n: 'Monarch', b: '👑', g: 1, i: '👑', take: 'Monarch übernehmen', now: 'ist jetzt Monarch' },
+  initiative: { n: 'Initiative', b: '🗝️ Init', g: 1, i: '🗝️', take: 'Initiative übernehmen', now: 'hat die Initiative – venture into Undercity' },
+  blessing: { n: "City's Blessing", b: '🏛️' },
+  vstar: { n: 'VSTAR Power used', b: 'VSTAR', doc: 'VSTAR Power' },
+  gx: { n: 'GX Attack used', b: 'GX', doc: 'GX Attack' }
 };
+// Reihenfolge im Zähler-Chip auf dem Feld: Wichtigstes zuerst
+const CTR_ORDER = ['poison', 'dmg', 'tax', 'speed', 'rad', 'energy', 'exp', 'storm', 'misc', 'misc2'];
 const CONDS = { // x = Asleep/Confused/Paralyzed schließen sich gegenseitig aus
   poisoned: { n: 'Poisoned' }, burned: { n: 'Burned' },
   asleep: { n: 'Asleep', x: 1 }, confused: { n: 'Confused', x: 1 }, paralyzed: { n: 'Paralyzed', x: 1 }
@@ -353,28 +355,33 @@ function renderPanel(pid) {
   el.style.setProperty('--pc', p.color);
   el.classList.toggle('active', act); el.classList.toggle('out', !!st.out); el.classList.toggle('win', !!st.win);
 
-  // Chips unten: alles, was gerade relevant ist – als lesbarer Text
-  // Jeder Chip öffnet ein passendes Kurzmenü (openQuick)
-  let chips = '';
-  if (state.monarch === pid) chips += `<button class="chip" data-act="flag" data-k="monarch">${FLAGS.monarch.s}</button>`;
-  if (state.initiative === pid) chips += `<button class="chip" data-act="flag" data-k="initiative">${FLAGS.initiative.s}</button>`;
-  for (const f in p.flags) if (p.flags[f] && FLAGS[f]) chips += `<button class="chip" data-act="flag" data-k="${f}">${FLAGS[f].s}</button>`;
-  for (const c in p.conds) if (p.conds[c] && CONDS[c]) chips += `<button class="chip" data-act="cond" data-k="${c}">${CONDS[c].n}</button>`;
-  for (const k of new Set(P.ctr.concat(Object.keys(p.ctr)))) {
-    const v = p.ctr[k], C = COUNTERS[k];
-    if (v && C) chips += `<button class="chip${C.lose && v >= C.lose ? ' lethal' : ''}" data-act="ctr" data-k="${k}">${C.s} <span style="color:${C.c}">${v}</span></button>`;
+  // Kopf: Name, ••• (Details), Status-Symbole (Monarch …), Timer.
+  // Fuß: höchstens ein Chip je Bereich – Commander Damage, Zähler, Zustände, Checkliste.
+  let badges = '';
+  if (state.monarch === pid) badges += `<button class="bdg" data-act="flag" data-k="monarch">${FLAGS.monarch.b}</button>`;
+  if (state.initiative === pid) badges += `<button class="bdg" data-act="flag" data-k="initiative">${FLAGS.initiative.b}</button>`;
+  for (const f in p.flags) if (p.flags[f] && FLAGS[f]) badges += `<button class="bdg" data-act="flag" data-k="${f}">${FLAGS[f].b}</button>`;
+
+  let foot = '';
+  if (P.cmd) { // ein Chip: alle Quellen als Farbpunkt + Zahl; hervorgehoben, wenn jemand anderes am Zug ist
+    const hitFrom = S.turns && state.players.length > 1 && state.active !== pid && !st.out ? state.active : null;
+    const src = Object.keys(p.cmd).map(Number).filter(f => state.players[f] && (p.cmd[f][0] || p.cmd[f][1]));
+    if (hitFrom != null) src.sort((x, y) => (y === hitFrom) - (x === hitFrom)); // aktiver Spieler zuerst
+    if (hitFrom != null || src.length) {
+      const leth = src.some(f => p.cmd[f][0] >= 21 || p.cmd[f][1] >= 21);
+      let parts = src.map(f => `<b style="background:${state.players[f].color}"></b>${(p.cmd[f][0] || 0) + (p.cmd[f][1] || 0)}`).join(' ');
+      if (hitFrom != null && !src.includes(hitFrom)) parts = `<b style="background:${state.players[hitFrom].color}"></b>+ ` + parts;
+      foot += `<button class="chip${hitFrom != null ? ' hit' : ''}${leth ? ' lethal' : ''}" data-act="cmdsum">⚔ ${parts}</button>`;
+    }
   }
-  // Treffer-Chip: Commander Damage vom Spieler am Zug schnell eintragen
-  const hitFrom = P.cmd && S.turns && state.players.length > 1 && state.active !== pid && !st.out ? state.active : null;
-  if (P.cmd) for (const f in p.cmd) {
-    const q = state.players[f]; if (!q || +f === hitFrom) continue;
-    p.cmd[f].forEach((v, i) => { if (v) chips += `<button class="chip${v >= 21 ? ' lethal' : ''}" data-act="cmd" data-f="${f}" data-i="${i}"><b style="background:${q.color}"></b>Cmd ${v}</button>`; });
+  const cs = CTR_ORDER.filter(k => p.ctr[k]);
+  if (cs.length) { // ein Chip: die zwei wichtigsten Zähler, Rest als +N
+    const leth = cs.some(k => COUNTERS[k].lose && p.ctr[k] >= COUNTERS[k].lose);
+    const show = cs.slice(0, 2).map(k => `${COUNTERS[k].s} <span style="color:${COUNTERS[k].c}">${p.ctr[k]}</span>`).join(' · ');
+    foot += `<button class="chip${leth ? ' lethal' : ''}" data-act="ctrs" data-k="${cs.length === 1 ? cs[0] : ''}">${show}${cs.length > 2 ? ` <small>+${cs.length - 2}</small>` : ''}</button>`;
   }
-  if (hitFrom != null) {
-    const q = state.players[hitFrom], a = p.cmd[hitFrom] || [0, 0], tot = (a[0] || 0) + (a[1] || 0);
-    chips = `<button class="chip hit${a[0] >= 21 || a[1] >= 21 ? ' lethal' : ''}" data-act="cmd" data-f="${hitFrom}" data-i="0"><b style="background:${q.color}"></b>⚔ Cmd ${tot || '+'}</button>` + chips;
-  }
-  let foot = chips + '<button class="chip" data-act="player">Details</button>';
+  const cd = Object.keys(CONDS).filter(c => p.conds[c]);
+  if (cd.length) foot += `<button class="chip" data-act="cond" data-k="${cd[0]}">${cd.map(c => CONDS[c].n).join(' · ')}</button>`;
   if (act && S.checks && P.checks) foot += P.checks.map(c => `<button class="chip chk${p.checks[c] ? ' on' : ''}" data-act="check" data-k="${esc(c)}">${p.checks[c] ? '✓ ' : ''}${esc(c)}</button>`).join('');
 
   const b = bub[pid], len = String(Math.abs(p.life)).length + (p.life < 0 ? 1 : 0);
@@ -382,7 +389,7 @@ function renderPanel(pid) {
   const lbl = st.out ? `<div class="lbl out">☠ ${esc(st.out)}</div>` : st.win ? `<div class="lbl win">🏆 ${esc(st.win)}</div>` :
     `<div class="lbl">${esc(P.label || 'Life')}${P.winAt ? ' / ' + P.winAt : ''}</div>`;
   const html =
-    `<div class="head"><button class="name" data-act="player">${esc(p.name)}</button>${act && S.turnTimer ? `<span class="tmr" data-tmr>${fmtT(now() - state.turnStart)}</span>` : ''}</div>` +
+    `<div class="head"><button class="name" data-act="player">${esc(p.name)}</button><button class="bdg more" data-act="player" aria-label="Details">•••</button>${badges}${act && S.turnTimer ? `<span class="tmr" data-tmr>${fmtT(now() - state.turnStart)}</span>` : ''}</div>` +
     (b ? `<div class="delta ${b > 0 ? 'pos' : 'neg'}">${sgn(b)}</div>` : '') +
     `<div class="life l${Math.min(len, 6)}${low ? ' low' : ''}"><span${P.calc ? ' data-act="calc"' : ''}>${num(p.life)}</span></div>` +
     lbl + `<div class="foot">${foot}</div>`;
@@ -435,7 +442,11 @@ board.addEventListener('click', e => {
   switch (a.dataset.act) {
     case 'player': case 'calc': openPlayer(pid); break;
     case 'check': toggleCheck(pid, a.dataset.k); break;
-    case 'flag': case 'cond': case 'ctr': case 'cmd': openQuick(pid, a.dataset.act, a.dataset.k, +a.dataset.f); break;
+    case 'flag': case 'cond': openQuick(pid, a.dataset.act, a.dataset.k); break;
+    case 'ctrs': if (a.dataset.k) openQuick(pid, 'ctr', a.dataset.k); else openPlayer(pid); break;
+    case 'cmdsum': // Spieler am Zug trifft dieses Feld -> Schnelltasten; sonst Details mit allen Quellen
+      if (S.turns && state.players.length > 1 && state.active !== pid) openQuick(pid, 'cmd', null, state.active); else openPlayer(pid);
+      break;
   }
 });
 hub.addEventListener('click', () => { hap(10); openMenu(); });
